@@ -12,7 +12,7 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 rm(list = ls())
 
 # Read the dataset in the current folder (Excel)
-data <- read_excel("PitchBook_All_Columns_DirectLending_2024_07_10.xlsx", skip = 8, col_names = TRUE)
+data <- read_excel("../Data/Raw/PitchBook_All_Columns_DirectLending_2024_07_10.xlsx", skip = 8, col_names = TRUE)
 
 # Split the Companies column into two columns based on the last ( and remove the last )
 data <- data %>%
@@ -41,8 +41,14 @@ data <- data %>%
 data <- data %>%
   select(Lenders, `Net Income`, EBITDA, `Deal Type 1`, everything())
 
-# output only the first 7 columns into excel file
-write.csv(data[, 1:7], "PitchBook_Cleaned.csv", row.names = FALSE)
+# keep only US companies (those with company country/territory/region as United States)
+data <- data %>%
+  filter(`Company Country/Territory/Region` == "United States")
+
+# keep only the unique borrower name, ticker, and date of issue
+deals <- data %>%
+  distinct(Lenders, Company, Ticker, `Issue Date`)
+write.csv(deals, "../Data/Cleaned/PitchBook_Cleaned.csv", row.names = FALSE)
 
 
 
