@@ -1,3 +1,15 @@
+---
+title: "Clean_PitchBook"
+output: html_document
+date: "2024-08-17"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+## R Markdown
 library(data.table)
 library(dplyr)
 library(haven)
@@ -5,6 +17,7 @@ library(stringr)
 library(mvtnorm)
 library(tidyr)
 library(readxl)
+library(stargazer)
 
 options(scipen = 999)
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
@@ -45,11 +58,22 @@ data <- data %>%
 data <- data %>%
   filter(`Company Country/Territory/Region` == "United States")
 
+# clean Lender name (getting rid of *)
+data <- data %>%
+  mutate(Lenders = str_remove(Lenders, "\\*"))
+
 # keep only the unique borrower name, ticker, and date of issue
 deals <- data %>%
   distinct(Lenders, Company, Ticker, `Issue Date`)
+# make sure each company-ticker-issue_date only has one observation in deals
+deals <- deals %>%
+  group_by(Company, Ticker, `Issue Date`) %>%
+  filter(row_number() == 1) %>%
+  ungroup()
 write.csv(deals, "../Data/Cleaned/PitchBook_Cleaned.csv", row.names = FALSE)
+```
 
+```{r}
 ### Import and Analyze preliminary sample of 100 contracts ###
 # Read the dataset in the current folder (Excel)
 test_sample <- read_excel("../Data/Cleaned/Pitchbook_Cleaned_Aug7.xlsx", col_names = TRUE)
@@ -66,8 +90,25 @@ test_sample <- test_sample %>%
 
 # generate the summary statistics for the sample 
 summary(test_sample)
+# change to data frame
+test_sample <- as.data.frame(test_sample)
+# output to latex table format (keep Monthly Financial, Budget/Forecast, Lender Meetings, Inspection, Hard_N, Soft_N, and Info_N) using stargazer and keep only the mean
+stargazer(test_sample[, c(4:7)], type = "latex", summary.stat = "mean", digits = 2, title = "Summary Statistics of Sample", out = "../Results/Summary_Stats_Sample.tex")
 # what's the correlation between the last 4 variables
 cor(test_sample[, 4:7])
 
 # number of zeros in each variable
-colSums(test_sample == 0)
+colSums(test_sample != 0)
+```
+
+```{r}
+### Merge the Cleaned sample with the original dataset for names and other information ###
+# merge lender names from deals and to test_sample using Company Ticker and Issue Date as keys
+# Change Isssue Date format of test_sample to date
+test_sample <- test_sample %>%
+  mutate(`Issue Date` = as.Date(`Issue Date`))
+inner_join <- left_join(test_sample, deals, by = c("Ticker", "Issue Date"))
+# order lender and company.y to the front
+inner_join <- inner_join %>%
+  select(Lenders, everything())
+```

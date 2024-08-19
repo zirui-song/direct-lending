@@ -4,7 +4,7 @@
 */
 
 *** Generate a list of globals (path) for future references
-global repodir "/Users/zrsong/Dropbox (MIT)/Research Projects/Banking Related/Private Credit"
+global repodir "/Users/zrsong/Dropbox (MIT)/Research Projects/Direct Lending"
 global datadir "$repodir/Data"
 global rawdir "$datadir/Raw"
 global intdir "$datadir/Intermediate"
@@ -98,3 +98,4 @@ save "$cleandir/dealscan_compustat_matched.dta", replace
 	keep if inrange(max_revtq, 10, 1000)
 	keep if country == "United States"
 	
+save "$cleandir/dealscan_compustat_matched.dta", replace
