@@ -18,6 +18,7 @@ library(mvtnorm)
 library(tidyr)
 library(readxl)
 library(stargazer)
+library(readr)
 
 options(scipen = 999)
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
@@ -111,4 +112,29 @@ inner_join <- left_join(test_sample, deals, by = c("Ticker", "Issue Date"))
 # order lender and company.y to the front
 inner_join <- inner_join %>%
   select(Lenders, everything())
+```
+
+```{r}
+# Import Compustat Quarterly from Raw folder
+compustat <- fread("../Data/Raw/2023-24_Compustat_Annual.csv")
+# Keep only 2021 observations
+compustat <- compustat %>%
+  filter(fyear == 2023) %>% filter(tic != "") %>% filter(!is.na(at))
+# for each ticker, only keep that with the largest at
+compustat <- compustat %>%
+  group_by(tic) %>%
+  filter(row_number() == which.max(at))
+
+# Merge the compustat data with the test sample data using the Ticker as the key
+test_compustat_joined <- inner_join %>%
+  left_join(compustat, by = c("Ticker" = "tic"))
+
+# Output summary statistics (mean, p25, median, p75, min, max for assets, revenues, ebitda, liabilities, and working capital using stargazer (make sure that the test_compustat_joined is a df)
+
+test_compustat_joined <- as.data.frame(test_compustat_joined)
+# Define custom labels for the variables
+variable_labels <- c("Total Assets", "EBIT", "EBITDA", "Total Liabilities", "Total Revenue", "Working Capital")
+
+stargazer(test_compustat_joined[, c(25:30)], type = "latex", summary.stat = c("min", "p25", "median", "p75", "max", "mean"), digits = 2, covariate.labels = variable_labels, title = "Summary Statistics of Sample with Compustat Data", out = "../Results/Summary_Stats_Sample_Compustat.tex")
+
 ```
