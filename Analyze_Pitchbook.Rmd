@@ -132,9 +132,47 @@ test_compustat_joined <- inner_join %>%
 # Output summary statistics (mean, p25, median, p75, min, max for assets, revenues, ebitda, liabilities, and working capital using stargazer (make sure that the test_compustat_joined is a df)
 
 test_compustat_joined <- as.data.frame(test_compustat_joined)
+# calculate ROA
+test_compustat_joined <- test_compustat_joined %>%
+  mutate(roa = ib / at)
+# calculate leverage
+test_compustat_joined <- test_compustat_joined %>%
+  mutate(leverage = lt / at)
+# replace xrd ppegt to be divided by at
+test_compustat_joined <- test_compustat_joined %>%
+  mutate(xrd = xrd / at,
+         ppegt = ppegt / at)
+
 # Define custom labels for the variables
-variable_labels <- c("Total Assets", "EBIT", "EBITDA", "Total Liabilities", "Total Revenue", "Working Capital")
+variable_labels <- c("Size", "EBITDA", "ROA", "Leverage", "Revenue", "Working Capital", "R&D", "Tangibility")
+```
 
-stargazer(test_compustat_joined[, c(25:30)], type = "latex", summary.stat = c("min", "p25", "median", "p75", "max", "mean"), digits = 2, covariate.labels = variable_labels, title = "Summary Statistics of Sample with Compustat Data", out = "../Results/Summary_Stats_Sample_Compustat.tex")
+```{r}
+# stargazer the seven variables of interest using variable names
+stargazer(test_compustat_joined[, c(25, 26, 34:35, 30:31, 32, 29)], type = "latex", summary.stat = c("mean", "min", "p25", "median", "p75", "max"), digits = 2, covariate.labels = variable_labels, title = "Summary Statistics of Sample with Compustat Data", out = "../Results/Summary_Stats_Sample_Compustat.tex")
 
+```
+
+```{r}
+# Generate the correlation matrix for the variables in the test_compustat_joined dataset (drop na values) 
+# c(5:9) and c(25:30) are the variables of interest
+cor(test_compustat_joined[, c(5:9, 25:30)], use = "complete.obs")
+
+```
+
+```{r}
+# define covariates as at, roa, leverage, ebitda
+# Output the regression results using stargazer
+
+# run four regressions with the dependent variables being Monthly Financial, Budget/Forecast, Lender Meetings, and Inspection
+lm1 <- lm(`Monthly Financial` ~ at + roa + leverage + factor(Lenders), data = test_compustat_joined)
+summary(lm1)
+lm2 <- lm(`Budget/Forecast` ~ at + roa + leverage + factor(Lenders), data = test_compustat_joined)
+summary(lm2)
+lm3 <- lm(`Lender Meetings` ~ at + roa + leverage + factor(Lenders), data = test_compustat_joined)
+summary(lm3)
+lm4 <- lm(`Inspection` ~ at + roa + leverage + factor(Lenders), data = test_compustat_joined)
+summary(lm4)
+# Output the regression results using stargazer
+stargazer(lm1, lm2, lm3, lm4, type = "text", omit = "factor(lenders)", title = "Regression Results", out = "../Results/Regression_Results.txt")
 ```
