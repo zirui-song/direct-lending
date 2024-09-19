@@ -1,5 +1,16 @@
 import wrds
 import pandas as pd
+import os
+import sys
+
+# Get the directory of the current script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Set the working directory to the script's directory
+os.chdir(script_dir)
+
+# Now the working directory is set to the script's directory
+print("Current Working Directory:", os.getcwd())
 
 # Connect to WRDS
 db = wrds.Connection(wrds_username='zrsong')
