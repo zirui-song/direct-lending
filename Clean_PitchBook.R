@@ -11,6 +11,7 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 rm(list = ls())
 
+### Clean the PitchBook Data ###
 # Read the dataset in the current folder (Excel)
 data <- read_excel("../Data/Raw/PitchBook_All_Columns_DirectLending_2024_07_10.xlsx", skip = 8, col_names = TRUE)
 
@@ -47,7 +48,7 @@ data <- data %>%
 
 # keep only the unique borrower name, ticker, and date of issue
 deals <- data %>%
-  distinct(Lenders, Company, Ticker, `Issue Date`)
+  distinct(Lenders, Company, Ticker, `Deal Size`, `Issue Date`, .keep_all = TRUE)
 write.csv(deals, "../Data/Cleaned/PitchBook_Cleaned.csv", row.names = FALSE)
 
 ### Import and Analyze preliminary sample of 100 contracts ###

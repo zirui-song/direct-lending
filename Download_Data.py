@@ -16,7 +16,7 @@ print("Current Working Directory:", os.getcwd())
 db = wrds.Connection(wrds_username='zrsong')
 
 # Define the start and end dates
-start_date = '2010-01-01'
+start_date = '1994-01-01'
 end_date = '2024-06-30'
 
 '''
