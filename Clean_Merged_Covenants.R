@@ -11,9 +11,21 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 rm(list = ls())
 
-check <- fread("../Data/Intermediate/updated_data_with_extracted_info.csv")
-check <- check %>%
-  select(accession, deal_amount, interest_spread, maturity)
+df_merged_crsp <- fread("../Data/LoansFull/df_merged_crsp.csv")
+# check if accession if unique by accession and type_attachment
+df_merged_clean <- df_merged_crsp %>%
+  group_by(accession, type_filing, type_attachment) %>%
+  filter(n() == 1)
+
+combined_loancontracts <- fread("../Data/LoansFull/combined_loancontracts.csv")
+# check if obs is unique by accession and type_attachment
+combined_loancontracts_clean <- combined_loancontracts %>%
+  group_by(accession, type_filing, type_attachment) %>%
+  filter(n() == 1)
+
+cleaned_loancontracts <- inner_join(combined_loancontracts_clean, df_merged_clean, by = c("accession", "type_filing", "type_attachment"))
+# save as csv
+write.csv(cleaned_loancontracts, "../Data/LoansFull/cleaned_loancontracts.csv", row.names = FALSE)
 
 ##################################################
   # Section 1: Data Cleaning (Agreements + SEC filing mapping)
@@ -89,7 +101,7 @@ lender_name1 <- fread("../credit_agreements/extracted_names1.csv", col.names = t
 lender_name2 <- fread("../credit_agreements/extracted_names2.csv", col.names = tolower)
 # append the two data frames
 lender_name <- rbind(lender_name1, lender_name2)
-# keep only those that don't have a lender name in column lender or contain string "Not Found"
+# drop those that don't have a lender name in column lender or contain string "Not Found"
 lender_name<- lender_name %>%
   filter(!is.na(lender) & !str_detect(lender, "Not Found"))
 
