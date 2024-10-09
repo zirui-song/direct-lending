@@ -5,125 +5,87 @@ library(stringr)
 library(mvtnorm)
 library(tidyr)
 library(readxl)
+library(ggplot2)
 
 options(scipen = 999)
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 rm(list = ls())
 
-df_merged_crsp <- fread("../Data/LoansFull/df_merged_crsp.csv")
+##################################################
+  # Section 0: Clean combined_loancontracts and df_merged_crsp
+##################################################
+#df_merged_crsp <- fread("../Data/LoansFull/df_merged_crsp.csv")
 # check if accession if unique by accession and type_attachment
-df_merged_clean <- df_merged_crsp %>%
-  group_by(accession, type_filing, type_attachment) %>%
-  filter(n() == 1)
+#df_merged_clean <- df_merged_crsp %>%
+#  group_by(accession, type_filing, type_attachment) %>%
+#  filter(n() == 1)
 
-combined_loancontracts <- fread("../Data/LoansFull/combined_loancontracts.csv")
+#combined_loancontracts <- fread("../Data/LoansFull/combined_loancontracts.csv")
 # check if obs is unique by accession and type_attachment
-combined_loancontracts_clean <- combined_loancontracts %>%
-  group_by(accession, type_filing, type_attachment) %>%
-  filter(n() == 1)
+#combined_loancontracts_clean <- combined_loancontracts %>%
+#  group_by(accession, type_filing, type_attachment) %>%
+#  filter(n() == 1)
 
-cleaned_loancontracts <- inner_join(combined_loancontracts_clean, df_merged_clean, by = c("accession", "type_filing", "type_attachment"))
+#cleaned_loancontracts <- inner_join(combined_loancontracts_clean, df_merged_clean, by = c("accession", "type_filing", "type_attachment"))
 # save as csv
-write.csv(cleaned_loancontracts, "../Data/LoansFull/cleaned_loancontracts.csv", row.names = FALSE)
+#write.csv(cleaned_loancontracts, "../Data/LoansFull/cleaned_loancontracts.csv", row.names = FALSE)
 
 ##################################################
   # Section 1: Data Cleaning (Agreements + SEC filing mapping)
 ##################################################
 
-# Load raw credit agreements data
-credit_agreements <- fread("../credit_agreements/Outputs/Information_Covenant_09292024.csv")
+# Load credit agreements with information covenants
+info_cov_combined_loancontracts <- fread("../Data/LoansFull/combined_loancontracts_info_cov.csv")
+# check if there are duplicated rows
+info_cov_combined_loancontracts <- info_cov_combined_loancontracts %>%
+  distinct()
 # keep only the needed columns
-credit_agreements_clean <- credit_agreements %>%
-  select(filename, monthly_fs, projected_fs, lender_meeting)
+info_cov_loancontracts_clean <- info_cov_combined_loancontracts %>%
+  select(accession, monthly_fs, projected_fs, lender_meeting)
 # keep only the maximum value of the three variables for each filename 
-credit_agreements_clean <- credit_agreements %>%
-  group_by(filename) %>%
+info_cov_loancontracts_clean <- info_cov_loancontracts_clean %>%
+  group_by(accession) %>%
   summarise(monthly_fs = max(monthly_fs), projected_fs = max(projected_fs), lender_meeting = max(lender_meeting))
-# merge back to all agreements
-agreements <- fread("../credit_agreements/Outputs/Agreements.csv")
+
+# merge back to all agreements with lender names extracted as valid from ChatGPT
+agreements <- fread("../Data/LoansFull/loancontracts_with_extracted_lendernames.csv")
 agreements <- agreements %>%
-  select('File Name')
-colnames(agreements) <- "filename"
-agreements <- agreements %>%
-  left_join(credit_agreements_clean, by = "filename")
+  left_join(info_cov_loancontracts_clean, by = "accession")
 # fill NA with 0
 agreements <- agreements %>%
   mutate(monthly_fs = ifelse(is.na(monthly_fs), 0, monthly_fs),
          projected_fs = ifelse(is.na(projected_fs), 0, projected_fs),
          lender_meeting = ifelse(is.na(lender_meeting), 0, lender_meeting))
-# extract the string after the first .nc/ and before .nc
+
+# keep only needed variables 
 agreements <- agreements %>%
-  mutate(file_name = str_extract(filename, "(?<=.nc/)(.*)(?=.nc)"))
-
-# Load SEC filing data
-filing_mapping <- fread("../credit_agreements/sec_filing_mapping_95to24.csv")
-filing_mapping <- as.data.table(filing_mapping)
-setnames(filing_mapping, tolower(names(filing_mapping)))
-# keep the string between the very last / and before .txt from fname as file_name
-filing_mapping <- filing_mapping %>%
-  mutate(file_name = str_extract(fname, "[^/]+(?=\\.txt)"))
-
-# merge the two data frames
-filing_data <- agreements %>%
-  left_join(filing_mapping, by = "file_name")
-
-# load compustat cik link 
-cik_gvkey_mapping <- fread("../credit_agreements/cik_gvkey_mapping.csv")
-# make sure that one cik matches to only one gvkey by taking the first observation
-cik_gvkey_mapping <- cik_gvkey_mapping %>%
-  group_by(cik) %>%
-  slice(1) %>% select(cik, gvkey, sec_start_date, sec_end_date)
-
-credit_agreement_gvkey_matched <- filing_data %>%
-  left_join(cik_gvkey_mapping, by = "cik")
-
-# clean credit_agreement to make sure each file_name corresponds to a unique gvkey
-# drop those with NA gvkey
-credit_agreement_gvkey_matched <- credit_agreement_gvkey_matched %>%
-  filter(!is.na(gvkey))
-credit_agreement_gvkey_matched <- credit_agreement_gvkey_matched %>%
-  group_by(file_name) %>%
-  slice(1)
+  select(accession, type_filing, type_attachment, filename.x, date.x, gvkey, cik, lpermno, coname, total_assets, borrower_name, lender_name, monthly_fs, projected_fs, lender_meeting)
+# rename filename.x and date.x to filename and date
+colnames(agreements) <- c("accession", "type_filing", "type_attachment", "filename", "date", "gvkey", "cik", "lpermno", "coname", "total_assets",
+                          "borrower_name", "lender_name", "monthly_fs", "projected_fs", "lender_meeting")
 
 ##################################################
-# Section 2: Lender Names
+# Section 2: Clean Lender Names
 ##################################################
 
-# generate year and quarter from filing date
-credit_agreement_gvkey_matched <- credit_agreement_gvkey_matched %>% 
-  select(filename, file_name, coname, fdate, cik, gvkey, monthly_fs, projected_fs, lender_meeting)
-credit_agreement_gvkey_matched <- credit_agreement_gvkey_matched %>% 
-  mutate(year = year(fdate), quarter = quarter(fdate))
-
-# match with borrower_lender_name
-lender_name1 <- fread("../credit_agreements/extracted_names1.csv", col.names = tolower)
-lender_name2 <- fread("../credit_agreements/extracted_names2.csv", col.names = tolower)
-# append the two data frames
-lender_name <- rbind(lender_name1, lender_name2)
 # drop those that don't have a lender name in column lender or contain string "Not Found"
-lender_name<- lender_name %>%
-  filter(!is.na(lender) & !str_detect(lender, "Not Found"))
 
-# rename columns
-colnames(lender_name) <- c("file_name", "borrower_chatgpt", "lender_chatgpt")
-# get rid of .nc at the end of file_name
-lender_name$file_name <- str_replace(lender_name$file_name, ".nc", "")
-
-# merge with filing data
-credit_agreement_names_matched <- credit_agreement_gvkey_matched %>%
-  inner_join(lender_name, by = c("file_name" = "file_name"))
-
-# make the lender_chatgpt all lower case
-credit_agreement_names_matched <- credit_agreement_names_matched %>%
-  mutate(lender_chatgpt = tolower(lender_chatgpt))
-# generate lead_arranger as the first string before the first comma in lender_chatgpt
-credit_agreement_names_matched <- credit_agreement_names_matched %>%
+# change the lender_name to lower case
+agreements <- agreements %>%
+  mutate(lender_name = tolower(lender_name))
+agreements <- agreements %>%
+  filter(!is.na(lender_name) & !str_detect(lender_name, "not found"))
+# rename lender and borrower names to be more informative 
+agreements <- agreements %>%
+  rename(lender_chatgpt = lender_name, borrower_chatgpt = borrower_name)
+# generate lead_arranger as the first string before the first comma
+agreements <- agreements %>%
   mutate(lead_arranger = str_extract(lender_chatgpt, "^[^,]+"))
 
 # manual check for lead_arranger names 
 # change banc to bank 
-credit_agreement_names_matched <- credit_agreement_names_matched %>%
+agreements <- agreements %>%
   mutate(lead_arranger = str_replace(lead_arranger, "banc", "bank")) %>%
   mutate(lead_arranger = str_replace(lead_arranger, "banque", "bank"))
   
@@ -133,18 +95,47 @@ non_regulated_ib_fcs <- c("brown brothers harriman & co.", "calyon", "cantor fit
                           "td securities", "the cit group/business credit", "wachovia", "wilmington")
 banks <- c("barclays", "bayerische", "bbva", "bear", "bmo", "bnp paribas", "bofa", "capital one", "cibc", "citicorp", "citigroup",
 "citizens", "credit lyonnais", "credit suisse", "goldman", "hsbc", "j.p. morgan", "jpmorgan", "jp morgan", "lehman brothers", 
-"merrill", "morgan stanley", "pnc", "rbc", "rbs", "societe generale", "suntrust", "toronto dominion", "ubs", "wells fargo")
+"merrill", "morgan stanley", "pnc", "rbc", "rbs", "societe generale", "suntrust", "toronto dominion", "ubs", "wells fargo", "société générale")
 # generate a variable that indicates whether the lender is a bank if "bank" appears in the name or strings in banks above appear in the name
 # Collapse the bank names into a single pattern
 bank_pattern <- str_c(banks, collapse = "|")
 
 # Generate a variable that indicates whether the lender is a bank
-credit_agreement_names_matched <- credit_agreement_names_matched %>%
-  mutate(lender_is_bank = ifelse(str_detect(lender_chatgpt, "bank")
-                                 | str_detect(lender_chatgpt, regex(bank_pattern, ignore_case = TRUE)), 1, 0))
+agreements <- agreements %>%
+  mutate(lender_is_bank = ifelse(str_detect(lead_arranger, "bank")
+                                 | str_detect(lead_arranger, regex(bank_pattern, ignore_case = TRUE)), 1, 0))
+
+### Time Series Plots of Use of Covenants
+# generate year from date
+agreements <- agreements %>%
+  mutate(year = year(date),
+         quarter = quarter(date))
+
+# time series plots of the number of credit agreements by year by lender_is_bank
+agreements %>%
+  group_by(year, lender_is_bank) %>%
+  summarise(n = n()) %>%
+  ggplot(aes(x = year, y = n, color = factor(lender_is_bank))) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Time Series of Number of Credit Agreements by Year",
+       x = "Year",
+       y = "Number of Credit Agreements",
+       color = "Lender is Bank") +
+  theme(legend.position = c(0.1, 0.8),    # Position legend inside the plot
+        legend.background = element_blank(),  # Remove legend background fill
+        legend.box.background = element_blank(),  # Remove legend border color
+        legend.text = element_text(size = 6),  # Smaller text inside the legend
+        legend.title = element_text(size = 6),  # Smaller title inside the legend
+        legend.key.size = unit(0.5, "cm"),  # Smaller keys in the legend
+        legend.spacing.y = unit(0.2, "cm"),  # Smaller vertical spacing
+        legend.spacing.x = unit(0.2, "cm")) +  # Smaller horizontal spacing
+  guides(color = guide_legend(title = "Lender is Bank"))
+# save figure as pdf
+ggsave("../Results/Figures/Agreements_by_year.pdf")
 
 # time series plots of the three variables (monthly_fs, projected_fs, lender_meeting) by year for banks and nonbanks on the same plot
-credit_agreement_names_matched %>%
+agreements %>%
   group_by(year, lender_is_bank) %>%
   summarise(monthly_fs = mean(monthly_fs), projected_fs = mean(projected_fs), lender_meeting = mean(lender_meeting)) %>%
   gather(key = "variable", value = "value", -year, -lender_is_bank) %>%
@@ -159,15 +150,19 @@ credit_agreement_names_matched %>%
   theme(legend.position = c(0.1, 0.8),    # Position legend inside the plot
         legend.background = element_blank(),  # Remove legend background fill
         legend.box.background = element_blank(),  # Remove legend border color
-        legend.text = element_text(size = 4),  # Smaller text inside the legend
-        legend.title = element_text(size = 4),  # Smaller title inside the legend
+        legend.text = element_text(size = 6),  # Smaller text inside the legend
+        legend.title = element_text(size = 6),  # Smaller title inside the legend
         legend.key.size = unit(0.5, "cm"),  # Smaller keys in the legend
         legend.spacing.y = unit(0.2, "cm"),  # Smaller vertical spacing
         legend.spacing.x = unit(0.2, "cm")) +  # Smaller horizontal spacing
   guides(color = guide_legend(title = "Variable"), 
          linetype = guide_legend(title = "Lender is Bank"))
 # save figure as pdf 
-ggsave("../Results/Figure1.pdf")
+ggsave("../Results/Figures/Info_Cov_94to23_full.pdf")
+
+##################################################
+# Section 3: Merge with Compustat Quarterly (Annual) Data
+##################################################
 
 # import compustat quarterly data
 compq <- fread("../Data/Raw/compustat_quarterly.csv")
@@ -176,28 +171,49 @@ compq <- compq %>%
   group_by(gvkey, fyearq, fqtr) %>%
   slice(1)
 # merge with filing data
-filing_data_filtered <- credit_agreement_names_matched %>%
-  left_join(compq, by = c("gvkey" = "gvkey", "year" = "fyearq", "quarter" = "fqtr"))
-# keep only needed variables
-filing_data_filtered <- filing_data_filtered %>%
-  select(fdate, filename, file_name, gvkey, tic, coname, lender_chatgpt, lender_is_bank, fdate, year, quarter, monthly_fs, projected_fs, lender_meeting, atq, revtq, niq, ibq, ltq, xrdq, ppegtq)
+agreements_compq_merged <- agreements %>%
+  left_join(compq %>% select(gvkey, fyearq, fqtr, atq, revtq, niq, ibq, ltq, xrdq, ppegtq), by = c("gvkey" = "gvkey", "year" = "fyearq", "quarter" = "fqtr"))
 # calculate ROA
-filing_data_filtered <- filing_data_filtered %>%
+agreements_compq_merged <- agreements_compq_merged %>%
   mutate(roa = ibq / atq)
 # calculate leverage
-filing_data_filtered <- filing_data_filtered %>%
+agreements_compq_merged <- agreements_compq_merged %>%
   mutate(leverage = ltq / atq)
 # replace xrd ppegt to be divided by at
-filing_data_filtered <- filing_data_filtered %>%
+agreements_compq_merged <- agreements_compq_merged %>%
   mutate(xrdq = xrdq / atq,
          ppegtq = ppegtq / atq)
 
 # keep only those firms with revenue between 10,000,000 and 1,000,000,000
-filing_data_filtered <- filing_data_filtered %>%
+agreements_mm <- agreements_compq_merged %>%
   filter(revtq >= 10 & revtq <= 1000)
 
+# time series plots of the number of credit agreements by year by lender_is_bank
+agreements_mm %>%
+  group_by(year, lender_is_bank) %>%
+  summarise(n = n()) %>%
+  ggplot(aes(x = year, y = n, color = factor(lender_is_bank))) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Time Series of Number of Credit Agreements by Year",
+       x = "Year",
+       y = "Number of Credit Agreements",
+       color = "Lender is Bank") +
+  theme(legend.position = c(0.1, 0.8),    # Position legend inside the plot
+        legend.background = element_blank(),  # Remove legend background fill
+        legend.box.background = element_blank(),  # Remove legend border color
+        legend.text = element_text(size = 6),  # Smaller text inside the legend
+        legend.title = element_text(size = 6),  # Smaller title inside the legend
+        legend.key.size = unit(0.5, "cm"),  # Smaller keys in the legend
+        legend.spacing.y = unit(0.2, "cm"),  # Smaller vertical spacing
+        legend.spacing.x = unit(0.2, "cm")) +  # Smaller horizontal spacing
+  guides(color = guide_legend(title = "Lender is Bank"))
+# save figure as pdf
+ggsave("../Results/Figures/Agreements_by_year_mm.pdf")
+
+
 # plot the frequencies of the three variables (monthly_fs, projected_fs, lender_meeting) by year 
-filing_data_filtered %>%
+agreements_mm %>%
   group_by(year, lender_is_bank) %>%
   summarise(monthly_fs = mean(monthly_fs), projected_fs = mean(projected_fs), lender_meeting = mean(lender_meeting)) %>%
   gather(key = "variable", value = "value", -year, -lender_is_bank) %>%
@@ -212,15 +228,23 @@ filing_data_filtered %>%
   theme(legend.position = c(0.1, 0.8),    # Position legend inside the plot
         legend.background = element_blank(),  # Remove legend background fill
         legend.box.background = element_blank(),  # Remove legend border color
-        legend.text = element_text(size = 4),  # Smaller text inside the legend
-        legend.title = element_text(size = 4),  # Smaller title inside the legend
+        legend.text = element_text(size = 6),  # Smaller text inside the legend
+        legend.title = element_text(size = 6),  # Smaller title inside the legend
         legend.key.size = unit(0.5, "cm"),  # Smaller keys in the legend
         legend.spacing.y = unit(0.2, "cm"),  # Smaller vertical spacing
         legend.spacing.x = unit(0.2, "cm")) +  # Smaller horizontal spacing
   guides(color = guide_legend(title = "Variable"), 
          linetype = guide_legend(title = "Lender is Bank"))
 # save figure as pdf 
-ggsave("../Results/Figure2.pdf")
+ggsave("../Results/Figures/Info_Cov_94to23_mm.pdf")
+
+### inner join agreements_mm with combined_loancontracts to get text so that I can use to extract deal information
+combined_loancontracts <- fread("../Data/LoansFull/combined_loancontracts.csv")
+combined_loancontracts_mm <- combined_loancontracts %>%
+  inner_join(agreements_mm %>% select(accession, type_filing, type_attachment), by = c("accession", "type_filing", "type_attachment"))
+
+# save as csv
+write.csv(combined_loancontracts_mm, "../Data/LoansFull/combined_loancontracts_mm.csv", row.names = FALSE)
 
 ##################################################
 # Section 3: Table 1/2 (Summary Statistics) and Main Regression
