@@ -129,8 +129,8 @@ private_credit_entities_pattern <- str_c(private_credit_entities, collapse = "|"
 
 # Generate a variable that indicates whether the lender is a bank
 agreements <- agreements %>%
-  mutate(lender_is_bank = ifelse(str_detect(lender_chatgpt, "bank")
-                                 | str_detect(lender_chatgpt, regex(bank_pattern, ignore_case = TRUE)), 1, 0))
+  mutate(lender_is_nonbank = ifelse(str_detect(lender_chatgpt, "bank")
+                                 | str_detect(lender_chatgpt, regex(bank_pattern, ignore_case = TRUE)), 0, 1))
 # generate a variable indicating whether the lender is a non-regulated investment bank or financial company
 agreements <- agreements %>%
   mutate(lender_is_non_regulated_ib_fc = ifelse(str_detect(lender_chatgpt, regex(non_regulated_ib_fcs_pattern, ignore_case = TRUE)), 1, 0))
@@ -144,7 +144,7 @@ agreements <- agreements %>%
   mutate(year = year(date),
          quarter = quarter(date))
 
-# time series plots of the number of credit agreements by year by lender_is_bank
+# time series plots of the number of credit agreements by year by lender_is_nonbank
 plot_agreements_ts <- function(data, lender_var) {
   lender_var_name <- deparse(substitute(lender_var))  # Get the name of lender_var as a string
   data %>%
@@ -168,7 +168,7 @@ plot_agreements_ts <- function(data, lender_var) {
     guides(color = guide_legend(title = lender_var_name))
 }
 # save figure as pdf
-plot_agreements_ts(agreements, lender_is_bank)
+plot_agreements_ts(agreements, lender_is_nonbank)
 ggsave("../Results/Figures/Agreements_by_year_bank.pdf")
 plot_agreements_ts(agreements, lender_is_non_regulated_ib_fc)
 plot_agreements_ts(agreements, lender_is_private_credit_entity)
@@ -204,7 +204,7 @@ plot_infocov_ts <- function(data, lender_var) {
     guides(color = guide_legend(title = "Variable"), 
            linetype = guide_legend(title = lender_var_name))
 }
-plot_infocov_ts(agreements, lender_is_bank)
+plot_infocov_ts(agreements, lender_is_nonbank)
 ggsave("../Results/Figures/Info_Cov_94to23_full.pdf")
 plot_infocov_ts(agreements, lender_is_non_regulated_ib_fc)
 plot_infocov_ts(agreements, lender_is_private_credit_entity)
@@ -238,8 +238,8 @@ agreements_compq_merged <- agreements_compq_merged %>%
 agreements_mm <- agreements_compq_merged %>%
   filter(revtq >= 10 & revtq <= 1000)
 
-# time series plots of the number of credit agreements by year by lender_is_bank
-plot_agreements_ts(agreements_mm, lender_is_bank)
+# time series plots of the number of credit agreements by year by lender_is_nonbank
+plot_agreements_ts(agreements_mm, lender_is_nonbank)
 ggsave("../Results/Figures/Agreements_by_year_bank_mm.pdf")
 plot_agreements_ts(agreements_mm, lender_is_non_regulated_ib_fc)
 ggsave("../Results/Figures/Agreements_by_year_non_regulated_ib_fc_mm.pdf")
@@ -247,7 +247,7 @@ plot_agreements_ts(agreements_mm, lender_is_private_credit_entity)
 ggsave("../Results/Figures/Agreements_by_year_private_credit_mm.pdf")
 
 # plot the frequencies of the three variables (monthly_fs, projected_fs, lender_meeting) by year 
-plot_infocov_ts(agreements_mm, lender_is_bank)
+plot_infocov_ts(agreements_mm, lender_is_nonbank)
 ggsave("../Results/Figures/Info_Cov_94to23_mm.pdf")
 plot_infocov_ts(agreements_mm, lender_is_non_regulated_ib_fc)
 ggsave("../Results/Figures/Info_Cov_94to23_non_regulated_ib_fc_mm.pdf")
@@ -296,11 +296,53 @@ cleaned_loancontracts_mm <- cleaned_loancontracts_mm %>%
 # save as csv
 write.csv(cleaned_loancontracts_mm, "../Data/LoansFull/combined_loancontracts_mm.csv", row.names = FALSE)
 
+### merge agreements_mm with deal information to arrive at the final dataset that includes only new contracts with deal information
+new_loancontracts_mm_dealinfo <- fread("../Data/LoansFull/loancontracts_with_extracted_dealinfo_final.csv")
+
+new_loancontracts_mm_dealinfo <- new_loancontracts_mm_dealinfo %>%
+  select(accession, type_filing, type_attachment, deal_amount, interest_spread, maturity)
+### clean the variables 
+# drop "," in the deal_amount variable
+new_loancontracts_mm_dealinfo$deal_amount1 <- str_replace_all(new_loancontracts_mm_dealinfo$deal_amount, ",", "")
+new_loancontracts_mm_dealinfo$deal_amount1 <- as.numeric(str_extract(new_loancontracts_mm_dealinfo$deal_amount1, "\\d+")) / 1e6 # in million
+# multiply deal_amount1 by 1e6 if "million" appears in the deal_amount variable
+new_loancontracts_mm_dealinfo$deal_amount1 <- ifelse(str_detect(new_loancontracts_mm_dealinfo$deal_amount, "million"), 
+                                                     new_loancontracts_mm_dealinfo$deal_amount1 * 1e6, new_loancontracts_mm_dealinfo$deal_amount1)
+# keep the number (including numbers with decimal points) after "LIBOR + "
+new_loancontracts_mm_dealinfo$interest_spread1 <- as.numeric(str_extract(new_loancontracts_mm_dealinfo$interest_spread, "\\d+\\.?\\d*"))
+# generate a variable that indicates whether the interest rate is fixed or floating (LIBOR, base, prime, etc.)
+new_loancontracts_mm_dealinfo$interest_type <- ifelse(str_detect(new_loancontracts_mm_dealinfo$interest_spread, "LIBOR|ABR|Prime|Base"), "floating", "fixed")
+# generate a date variable for maturity (format is November 15, 2013)
+new_loancontracts_mm_dealinfo$maturity1 <- as.Date(new_loancontracts_mm_dealinfo$maturity, format = "%B %d, %Y")
+# drop if any of the above variables are NA
+#new_loancontracts_mm_dealinfo <- new_loancontracts_mm_dealinfo %>%
+# filter(!is.na(deal_amount) & !is.na(interest_spread1) & !is.na(maturity1))
+# merge with agreements_mm
+agreements_mm_dealinfo <- agreements_mm %>%
+  inner_join(new_loancontracts_mm_dealinfo, by = c("accession", "type_filing", "type_attachment"))
+# save as csv
+write.csv(agreements_mm_dealinfo, "../Data/Cleaned/agreements_mm_dealinfo.csv", row.names = FALSE)
+
+# plot with agreements_mm_dealinfo
+plot_infocov_ts(agreements_mm_dealinfo, lender_is_nonbank)
+ggsave("../Results/Figures/Info_Cov_94to23_mm_dealinfo.pdf")
+plot_infocov_ts(agreements_mm_dealinfo, lender_is_non_regulated_ib_fc)
+ggsave("../Results/Figures/Info_Cov_94to23_non_regulated_ib_fc_mm_dealinfo.pdf")
+plot_infocov_ts(agreements_mm_dealinfo, lender_is_private_credit_entity)
+ggsave("../Results/Figures/Info_Cov_94to23_private_credit_mm_dealinfo.pdf")
+
+plot_agreements_ts(agreements_mm_dealinfo, lender_is_nonbank)
+ggsave("../Results/Figures/Agreements_by_year_bank_mm_dealinfo.pdf")
+plot_agreements_ts(agreements_mm_dealinfo, lender_is_non_regulated_ib_fc)
+ggsave("../Results/Figures/Agreements_by_year_non_regulated_ib_fc_mm_dealinfo.pdf")
+plot_agreements_ts(agreements_mm_dealinfo, lender_is_private_credit_entity)
+ggsave("../Results/Figures/Agreements_by_year_private_credit_mm_dealinfo.pdf")
+
 ##################################################
 # Section 3: Table 1/2 (Summary Statistics) and Main Regression
 ##################################################
 
-### Table 1: Summary Statistics of full sample of 3446 loan contracts from 2010 to 2024 by lender_is_bank
+### Table 1: Summary Statistics of full sample of 3446 loan contracts from 2010 to 2024 by lender_is_nonbank
 # summary table of filing_data_filtered
 # make sure filing_data_filtered is a df
 # filing_data_filtered <- as.data.frame(filing_data_filtered)
@@ -337,23 +379,6 @@ write.csv(cleaned_loancontracts_mm, "../Data/LoansFull/combined_loancontracts_mm
 # generate year and quarter from filing date
 #pitchbook <- pitchbook %>%
 #  mutate(year = year(`Issue Date`), quarter = quarter(`Issue Date`))
-
-### re-read the extracted contracts
-#nonbank_contracts_extracted <- fread("../Data/Intermediate/updated_data_with_extracted_info.csv")
-#nonbank_contracts_extracted <- nonbank_contracts_extracted %>%
-#  select(accession, deal_amount, interest_spread, maturity)
-### clean the variables 
-  # keep only the number after $
-  #nonbank_contracts_extracted$deal_amount <- as.numeric(str_extract(nonbank_contracts_extracted$deal_amount, "\\d+"))
-  # keep the number (including numbers with decimal points) after "LIBOR + "
-  #nonbank_contracts_extracted$interest_spread1 <- as.numeric(str_extract(nonbank_contracts_extracted$interest_spread, "\\d+\\.?\\d*"))
-  # generate a variable that indicates whether the interest rate is fixed or floating (LIBOR, base, prime, etc.)
-  #nonbank_contracts_extracted$interest_type <- ifelse(str_detect(nonbank_contracts_extracted$interest_spread, "LIBOR|ABR|Prime|Base"), "floating", "fixed")
-  # generate a date variable for maturity (format is November 15, 2013)
-  #nonbank_contracts_extracted$maturity1 <- as.Date(nonbank_contracts_extracted$maturity, format = "%B %d, %Y")
-  # drop if any of the above variables are NA
-  #nonbank_contracts_extracted <- nonbank_contracts_extracted %>%
-  # filter(!is.na(deal_amount) & !is.na(interest_spread1) & !is.na(maturity1))
   
 # ### merge back to nonbank_loan
 # nonbank_loan_with_deal_info <- nonbank_loan %>%
@@ -381,7 +406,7 @@ write.csv(cleaned_loancontracts_mm, "../Data/LoansFull/combined_loancontracts_mm
 # 
 # # keep only variables useful for analysis 
 # all_merged_deals <- all_merged_deals %>%
-#   select(fdate, gvkey, tic, coname, lender_chatgpt, lender_is_bank, year, quarter, monthly_fs, projected_fs, lender_meeting, 
+#   select(fdate, gvkey, tic, coname, lender_chatgpt, lender_is_nonbank, year, quarter, monthly_fs, projected_fs, lender_meeting, 
 #          atq, revtq, niq, ibq, ltq, xrdq, ppegtq, roa, leverage, lead_arranger, deal_amount, 
 #          tranche_active_date, tranche_maturity_date, maturity, margin_bps)
 # 
@@ -389,10 +414,10 @@ write.csv(cleaned_loancontracts_mm, "../Data/LoansFull/combined_loancontracts_mm
 # write.csv(all_merged_deals, "../Data/Cleaned/all_merged_deals.csv", row.names = FALSE)
 # 
 # all_merged_deals %>%
-#   group_by(year, lender_is_bank) %>%
+#   group_by(year, lender_is_nonbank) %>%
 #   summarise(monthly_fs = mean(monthly_fs), projected_fs = mean(projected_fs), lender_meeting = mean(lender_meeting)) %>%
-#   gather(key = "variable", value = "value", -year, -lender_is_bank) %>%
-#   ggplot(aes(x = year, y = value, color = variable, linetype = factor(lender_is_bank))) +
+#   gather(key = "variable", value = "value", -year, -lender_is_nonbank) %>%
+#   ggplot(aes(x = year, y = value, color = variable, linetype = factor(lender_is_nonbank))) +
 #   geom_line() +
 #   theme_minimal() +
 #   labs(title = "Time Series of Monthly FS, Projected FS, and Lender Meeting by Year",
