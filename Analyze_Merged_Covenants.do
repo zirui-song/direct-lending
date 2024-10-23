@@ -192,21 +192,29 @@ local deal_vars "deal_amount1 maturity_year interest_spread1"
 local y_vars "lender_is_nonbank lender_is_private_credit" 
 local info_vars "monthly_fs projected_fs lender_meeting hard_info back_info all_info"
 
-psmatch2 lender_is_private_credit_entity `borr_vars' i.ff_12 `deal_vars', out(monthly_fs) logit n(3) ai(3) common caliper(0.01)
+foreach var of varlist `info_vars' {
+	eststo: psmatch2 lender_is_private_credit `borr_vars' i.ff_12 `deal_vars', out(`var') logit n(3) ai(3) common caliper(0.01)
+}
+estadd scalar r(att)
+estadd scalar r(seatt)
+esttab using "$tabdir/Table5_main_psm.tex", replace obslast nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses star(* 0.10 ** 0.05 *** 0.01) plain lines fragment noconstant
+eststo clear
+
+pstest `borr_vars' `deal_vars', graph both graphregion(color(white)) bgcolor(white)
+
+// Post the results for esttab
+ereturn post b V
+ereturn display
+
 esttab using "$tabdir/Table5_main_psm.tex", replace nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
-psmatch2 lender_is_private_credit_entity `borr_vars' i.ff_12 `deal_vars', out(projected_fs) logit n(3) ai(3) common caliper(0.01)
-psmatch2 lender_is_private_credit_entity `borr_vars' i.ff_12 `deal_vars', out(lender_meeting) logit n(3) ai(3) common caliper(0.01)
-psmatch2 lender_is_private_credit_entity `borr_vars' i.ff_12 `deal_vars', out(hard_info) logit n(3) ai(3) common caliper(0.01)
-psmatch2 lender_is_private_credit_entity `borr_vars' i.ff_12 `deal_vars', out(back_info) logit n(3) ai(3) common caliper(0.01)
-psmatch2 lender_is_private_credit_entity `borr_vars' i.ff_12 `deal_vars', out(all_info) logit n(3) ai(3) common caliper(0.01)
-pstest `borr_vars' `deal_vars', graph both
+eststo clear
 
 
 /**************
 	Regression Discontinuity Design Around prev_ebitda == 0
 	***************/
 	
-* check for share of nonbank loans for over prev_ebitda
+/* check for share of nonbank loans for over prev_ebitda
 egen prev_ebitda_bins = cut(prev_ebitda), at(-50 -20 -10 -1 10 20 50 100 200)
 preserve
 	collapse (mean) lender_is_private_credit_entity (count) gvkey, by(prev_ebitda_bins)
@@ -225,10 +233,11 @@ rdrobust lender_is_nonbank prev_ebitda, c(0)
 rdrobust monthly_fs prev_ebitda, c(0) fuzzy(lender_is_nonbank)
 
 /**************
-	DiD in 2018 from SNC increase from $20 to $100 million
+	DiD
 	***************/
 	
-use "$intdir/intermediate_data_after_main_regression.dta", clear
+*** in 2018 from SNC increase from $20 to $100 million	
+use "$cleandir/final_regression_sample.dta", clear
 
 *** generate treat and post variables 
 
@@ -236,13 +245,58 @@ gen treat = 1 if inrange(deal_amount1, 20/1000, 100/1000)
 replace treat = 0 if treat == .
 
 gen post = 1 if year >= 2018
-replace post = 0 if year == .
+replace post = 0 if post == .
 
 gen treat_post = treat * post
 
-*** TWFE
+*TWFE
+reghdfe lender_is_nonbank treat_post maturity_year interest_spread1, absorb(year ff_12) 
+*/
 
-reghdfe lender_is_private_credit treat_post maturity_year interest_spread1, absorb(year gvkey)
+*** in 2013 SNC guideline says that firms with <0 ebitda is substandard -> after 2013 firms
+*	with < 0 ebitda is less likely to borrow from banks and more likely to borrow from PCs
+* 	Treat: < EBITDA, Post: 2014 onward
+use "$cleandir/final_regression_sample.dta", clear
+
+*** generate treat and post variables 
+
+gen treat = 1 if prev_ebitda < 0
+replace treat = 0 if treat == .
+
+gen post = 1 if year >= 2014
+replace post = 0 if post == .
+
+gen treat_post = treat * post
+
+* Year-Indutry FE with Treat and Treat_Post
+reghdfe lender_is_private_credit treat post treat_post maturity_year interest_spread1, absorb(year ff_12)
+reghdfe monthly_fs treat post treat_post maturity_year interest_spread1, absorb(year ff_12)
+
+* Year-Indutry FE with Treat and Treat_Post
+la var treat_post "Treat*Post"
+local borr_vars "prev_ebitda atq roa leverage"
+local deal_vars "deal_amount1 maturity_year interest_spread1"	
+local info_vars "monthly_fs projected_fs lender_meeting hard_info back_info all_info"
+eststo: reghdfe lender_is_private_credit treat_post `deal_vars', absorb(year gvkey)
+foreach var of varlist `info_vars' {
+	eststo: reghdfe `var' treat_post `deal_vars', absorb(year gvkey)
+}
+esttab using "$tabdir/Table6_main_did.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+* clear storeed est
+eststo clear
+
+
+* fuzzy DID
+*sort treat year
+*by treat year: egen mean_D = mean(lender_is_private_credit)
+*by treat: g lag_mean_D = mean_D[_n-1] if treat == treat[_n-1] & year-1==year[_n-1]
+*g G_T = sign(mean_D - lag_mean_D)
+*g G_Tplus1 = G_T[_n+1] if treat==treat[_n+1] & year+1 == year[_n+1]
+*replace G_T = 0 if G_T == .
+*replace G_Tplus1 = 0 if G_Tplus1 == .
+*fuzzydid monthly_fs treat year lender_is_private_credit, did
 
 
 /**************
