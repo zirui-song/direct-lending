@@ -6,11 +6,18 @@ library(mvtnorm)
 library(tidyr)
 library(readxl)
 library(ggplot2)
+library(fuzzyjoin)
+library(stringdist)
+library(zoo)
+library(readxl)
 
 options(scipen = 999)
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 rm(list = ls())
+
+# Define the base figure path
+figure_path <- "/Users/zrsong/Dropbox (MIT)/Apps/Overleaf/Information Covenants of Direct Lending/Figures"
 
 ##################################################
   # Section 0: Clean combined_loancontracts and df_merged_crsp
@@ -30,6 +37,26 @@ rm(list = ls())
 #cleaned_loancontracts <- inner_join(combined_loancontracts_clean, df_merged_clean, by = c("accession", "type_filing", "type_attachment"))
 # save as csv
 #write.csv(cleaned_loancontracts, "../Data/LoansFull/cleaned_loancontracts.csv", row.names = FALSE)
+
+##################################################
+# Section 0.1: Clean Preqin Fund Names 
+##################################################
+
+preqin <- read_excel("../Data/Raw/Preqin_deals_export-10-23-2024-1857.xlsx")
+names(preqin) <- tolower(names(preqin))
+
+# keep only the needed columns
+preqin_names <- preqin[, c("portfolio company", "portfolio company city", "portfolio company state/ county", 
+                           "debt provider name", "debt provider city", "debt provider state/ county", "industry classification")]
+# rename the above columns
+colnames(preqin_names) <- c("company_name", "company_city", "company_state", "lender_name", "lender_city", "lender_state", "industry")
+# change lender_name to lower case
+preqin_names <- preqin_names %>%
+  mutate(lender_name = tolower(lender_name))
+# generate lender_names as all lender_name in preqin_names
+lender_names <- preqin_names %>%
+  select(lender_name) %>%
+  distinct()
 
 ##################################################
   # Section 1: Data Cleaning (Agreements + SEC filing mapping)
@@ -95,7 +122,7 @@ private_credit_entities <- c("ares", "abc", "alter domus", "apollo", "athene", "
                              "blackrock", "blackstone", "blue ridge", "blue torch", "brookfield", 
                              "Canada pension plan investment board", "cap 1 llc", "carter", "centre lane", 
                              "cerberus", "cf capital llc", "cf equipment loans", "cf turul llc", 
-                             "chambers energy management", "chatham credit", "churchill", "colfin", "compass", 
+                             "chambers energy management", "chatham credit", "churchill", "colfin", 
                              "comvest", "cortland capital market", "cortland products", "cpp", "cyan partners", 
                              "db realty", "db structured", "deerfield", "eclipse business", "eig ", "ej funds", 
                              "elliott ", "encina ", "enervest ", "enhanced capital ", "ept ski properties", 
@@ -113,10 +140,11 @@ private_credit_entities <- c("ares", "abc", "alter domus", "apollo", "athene", "
                              "riverstone ", "rock", "sales capital partners", "siena lending group", "silver lake", "silver point", 
                              "sixth street", "solar capital", "squadron capital", "standard general ", "swk ", "tangshan caofeidian ", 
                              "tc ", "tcf ", "tcw", "tennenbaum", "thermo ", "third eye capital corporation", "thl", "tpg specialty", 
-                             "victory park management", "wilmington trust", "wynnefield capital", "z investment", "sell credit opportunities")
+                             "victory park management", "wynnefield capital", "z investment", "sell credit opportunities")
 non_regulated_ib_fcs <- c("brown brothers harriman & co.", "calyon", "cantor fitzgerald securities", "chase securities", 
                           "federal home loan mortgage corporation", "jefferies", "salomon smith barney", "swk", 
-                          "td securities", "the cit group/business credit", "wachovia", "wilmington")
+                          "td securities", "the cit group/business credit", "wachovia", "wilmington", "ge capital", "ing capital",
+                          "walker & dunlop", "truist")
 banks <- c("barclays", "bayerische", "bbva", "bear", "bmo", "bnp paribas", "bofa", "capital one", "cibc", "citicorp", "citigroup",
 "citizens", "credit lyonnais", "credit suisse", "goldman", "hsbc", "j.p. morgan", "j. p. morgan", "jpmorgan", "jp morgan", "lehman brothers", 
 "merrill", "morgan stanley", "pnc", "rbc", "rbs", "societe generale", "suntrust", "toronto dominion", "ubs", "wells fargo", 
@@ -129,14 +157,80 @@ private_credit_entities_pattern <- str_c(private_credit_entities, collapse = "|"
 
 # Generate a variable that indicates whether the lender is a bank
 agreements <- agreements %>%
-  mutate(lender_is_nonbank = ifelse(str_detect(lender_chatgpt, "bank")
-                                 | str_detect(lender_chatgpt, regex(bank_pattern, ignore_case = TRUE)), 0, 1))
+  mutate(lender_is_nonbank = ifelse(str_detect(lead_arranger, "bank")
+                                 | str_detect(lead_arranger, regex(bank_pattern, ignore_case = TRUE)), 0, 1))
 # generate a variable indicating whether the lender is a non-regulated investment bank or financial company
 agreements <- agreements %>%
-  mutate(lender_is_non_regulated_ib_fc = ifelse(str_detect(lender_chatgpt, regex(non_regulated_ib_fcs_pattern, ignore_case = TRUE)), 1, 0))
+  mutate(lender_is_non_regulated_ib_fc = ifelse(str_detect(lead_arranger, regex(non_regulated_ib_fcs_pattern, ignore_case = TRUE)), 1, 0))
 # generate a variable indicating whether the lender is a private credit entity
 agreements <- agreements %>%
-  mutate(lender_is_private_credit_entity = ifelse(str_detect(lender_chatgpt, regex(private_credit_entities_pattern, ignore_case = TRUE)), 1, 0))
+  mutate(lender_is_private_credit_entity = ifelse(str_detect(lead_arranger, regex(private_credit_entities_pattern, ignore_case = TRUE)), 1, 0))
+
+# NEW FROM OCT 23RD (Use Pitchbook lender_name fuzzy matched to lead_arranger to identify private credit entities))
+
+# Define a regular expression pattern to match unwanted suffixes at the end of the string
+agreements <- agreements %>%
+  mutate(lead_arranger_cleaned = str_replace_all(lead_arranger, "\\.", ""))
+pattern <- "\\s*(\\b(?:llc|lp|ag|limited|plc|iv|co|gp|spv|inc)\\b)$"
+
+# Clean the 'lead_arranger_cleaned' column by removing the unwanted suffixes
+agreements <- agreements %>%
+  mutate(lead_arranger_cleaned = str_trim(str_remove_all(lead_arranger_cleaned, pattern), side = "both"))
+
+# output all unique lender names from agreements and merge with all lender_names
+unique_lender_names <- agreements %>%
+  select(lead_arranger_cleaned) %>%
+  distinct()
+
+#Clean lender_names using the pattern above as well
+lender_names <- lender_names %>%
+  mutate(lender_name_cleaned = str_replace_all(lender_name, "\\.", "")) %>%
+  mutate(lender_name_cleaned = str_trim(str_remove_all(lender_name_cleaned, pattern), side = "both"))
+
+###
+fuzzy_matched_lenders <- stringdist_join(
+  unique_lender_names, 
+  lender_names, 
+  by = c("lead_arranger_cleaned" = "lender_name_cleaned"),
+  mode = "left",       # Keep all from agreements (left side)
+  method = "jw",       # Jaro-Winkler distance
+  max_dist = 0.05,      # Maximum allowed distance (adjustable)
+  distance_col = "dist" # Add a distance column to see the match score
+)
+# drop if NA
+fuzzy_matched_lenders <- fuzzy_matched_lenders %>%
+  filter(!is.na(lender_name_cleaned))
+# Sort by distance to check the closest matches
+fuzzy_matched_lenders <- fuzzy_matched_lenders %>%
+  arrange(lead_arranger_cleaned, dist)
+# keep only the smallest matches in terms of distance
+fuzzy_matched_lenders <- fuzzy_matched_lenders %>%
+  group_by(lead_arranger_cleaned) %>%
+  filter(dist == min(dist))
+# make sure each lead_arranger_cleaned is unique
+fuzzy_matched_lenders <- fuzzy_matched_lenders %>%
+  distinct(lead_arranger_cleaned, .keep_all = TRUE)
+# merge this list back to agreements
+agreements <- agreements %>%
+  left_join(fuzzy_matched_lenders, by = c("lead_arranger_cleaned" = "lead_arranger_cleaned"))
+# generate a variable that indicates whether the lender is a private credit entity (dist != NA and not a bank)
+agreements <- agreements %>%
+  mutate(lender_is_private_credit_entity_pitchbook = ifelse(!is.na(dist) & lender_is_nonbank == 1, 1, 0))
+# change the lender_is_private_credit_entity to 0 if == lender_is_non_regulated_ib_fc = 0
+agreements <- agreements %>%
+  mutate(lender_is_private_credit_entity_pitchbook = ifelse(lender_is_non_regulated_ib_fc == 1, 0, lender_is_private_credit_entity_pitchbook))
+
+# generate a variable that is equal to 1 if lender_is_private_credit_entity == 1 or lender_is_private_credit_entity_pitchbook == 1, and 0 if lender_is_nonbank == 0
+agreements <- agreements %>%
+  mutate(lender_is_private_credit = case_when(
+    lender_is_private_credit_entity == 1 | lender_is_private_credit_entity_pitchbook == 1 ~ 1,
+    lender_is_nonbank == 0 ~ 0,
+    TRUE ~ NA_real_  # This sets the value to NA for all other cases
+  ))
+
+# arrange by lender_is_nonbank, lender_is_non_regulated_ib_fc, lender_is_private_credit_entity, lender_is_private_credit_entity_pitchbook, lender_is_private_credit
+agreements <- agreements %>%
+  arrange(lender_is_nonbank, lender_is_non_regulated_ib_fc, lender_is_private_credit_entity, lender_is_private_credit_entity_pitchbook, lender_is_private_credit)
 
 ### Time Series Plots of Use of Covenants
 # generate year from date
@@ -144,6 +238,7 @@ agreements <- agreements %>%
   mutate(year = year(date),
          quarter = quarter(date))
 
+##################################################
 # time series plots of the number of credit agreements by year by lender_is_nonbank
 plot_agreements_ts <- function(data, lender_var) {
   lender_var_name <- deparse(substitute(lender_var))  # Get the name of lender_var as a string
@@ -169,46 +264,59 @@ plot_agreements_ts <- function(data, lender_var) {
 }
 # save figure as pdf
 plot_agreements_ts(agreements, lender_is_nonbank)
-ggsave("../Results/Figures/Agreements_by_year_bank.pdf")
-plot_agreements_ts(agreements, lender_is_non_regulated_ib_fc)
-plot_agreements_ts(agreements, lender_is_private_credit_entity)
-ggsave("../Results/Figures/Agreements_by_year_private_credit.pdf")
+ggsave(file.path(figure_path, "Agreements_by_year_bank.pdf"))
+plot_agreements_ts(agreements, lender_is_private_credit)
+ggsave(file.path(figure_path, "Agreements_by_year_private_credit.pdf"))
 
-private_credit_deals <- agreements %>%
-  group_by(year, lender_is_private_credit_entity) %>%
-  summarise(n = n())
-
+##################################################
 # time series plots of the three variables (monthly_fs, projected_fs, lender_meeting) by year for banks and nonbanks on the same plot
+library(zoo)
 plot_infocov_ts <- function(data, lender_var) {
   lender_var_name <- deparse(substitute(lender_var))  # Get the name of lender_var as a string
   data %>%
     group_by(year, {{ lender_var }}) %>%
-    summarise(monthly_fs = mean(monthly_fs), projected_fs = mean(projected_fs), lender_meeting = mean(lender_meeting)) %>%
+    summarise(
+      monthly_fs = mean(monthly_fs, na.rm = TRUE),
+      projected_fs = mean(projected_fs, na.rm = TRUE),
+      lender_meeting = mean(lender_meeting, na.rm = TRUE)
+    ) %>%
+    # Apply 3-year moving average smoothing using rollmean from zoo package
+    mutate(
+      monthly_fs = rollmean(monthly_fs, 3, fill = NA, align = "right", partial = TRUE),
+      projected_fs = rollmean(projected_fs, 3, fill = NA, align = "right", partial = TRUE),
+      lender_meeting = rollmean(lender_meeting, 3, fill = NA, align = "right", partial = TRUE)
+    ) %>%
+    # Reshape the data from wide to long format for easier plotting
     gather(key = "variable", value = "value", -year, -{{ lender_var }}) %>%
     ggplot(aes(x = year, y = value, color = variable, linetype = factor({{ lender_var }}))) +
     geom_line() +
     theme_minimal() +
-    labs(title = "Time Series of Monthly FS, Projected FS, and Lender Meeting by Year",
+    labs(title = "3-Year Moving Average of Monthly FS, Projected FS, and Lender Meeting Covenants",
          x = "Year",
-         y = "Frequency",
+         y = "Proportion of Agreements with Information Covenant",
          color = "Variable",
          linetype = "Lender is Bank") +
-    theme(legend.position = c(0.1, 0.8),    # Position legend inside the plot
-          legend.background = element_blank(),  # Remove legend background fill
-          legend.box.background = element_blank(),  # Remove legend border color
-          legend.text = element_text(size = 8),  # Smaller text inside the legend
-          legend.title = element_text(size = 8),  # Smaller title inside the legend
-          legend.key.size = unit(0.5, "cm"),  # Smaller keys in the legend
-          legend.spacing.y = unit(0.2, "cm"),  # Smaller vertical spacing
-          legend.spacing.x = unit(0.2, "cm")) +  # Smaller horizontal spacing
-    guides(color = guide_legend(title = "Variable"), 
-           linetype = guide_legend(title = lender_var_name))
+    # Manually set linetypes: solid for 1, dashed for 0
+    scale_linetype_manual(values = c("1" = "solid", "0" = "dashed")) + 
+    theme(
+      legend.position = c(0.2, 0.8),  # Position legend inside the plot
+      legend.background = element_blank(),  # Remove legend background fill
+      legend.box.background = element_blank(),  # Remove legend border color
+      legend.text = element_text(size = 8),  # Smaller text inside the legend
+      legend.title = element_text(size = 8),  # Smaller title inside the legend
+      legend.key.size = unit(0.5, "cm"),  # Smaller keys in the legend
+      legend.spacing.y = unit(0.2, "cm"),  # Smaller vertical spacing
+      legend.spacing.x = unit(0.2, "cm")   # Smaller horizontal spacing
+    ) +
+    guides(
+      color = guide_legend(title = "Variable"), 
+      linetype = guide_legend(title = lender_var_name)
+    )
 }
 plot_infocov_ts(agreements, lender_is_nonbank)
-ggsave("../Results/Figures/Info_Cov_94to23_full.pdf")
-plot_infocov_ts(agreements, lender_is_non_regulated_ib_fc)
+ggsave(file.path(figure_path, "Info_Cov_94to23_full.pdf"))
 plot_infocov_ts(agreements, lender_is_private_credit_entity)
-ggsave("../Results/Figures/Info_Cov_94to23_private_credit.pdf")
+ggsave(file.path(figure_path, "Info_Cov_94to23_private_credit.pdf"))
 
 ##################################################
 # Section 3: Merge with Compustat Quarterly (Annual) Data
@@ -222,7 +330,8 @@ compq <- compq %>%
   slice(1)
 # merge with filing data
 agreements_compq_merged <- agreements %>%
-  left_join(compq %>% select(gvkey, fyearq, fqtr, atq, revtq, niq, ibq, ltq, xrdq, ppegtq), by = c("gvkey" = "gvkey", "year" = "fyearq", "quarter" = "fqtr"))
+  left_join(compq %>% select(gvkey, fyearq, fqtr, atq, revtq, niq, ibq, ltq, xrdq, xrdy, ppegtq, ppentq, mkvaltq, prccq, cshoq, ), 
+            by = c("gvkey" = "gvkey", "year" = "fyearq", "quarter" = "fqtr"))
 # calculate ROA
 agreements_compq_merged <- agreements_compq_merged %>%
   mutate(roa = ibq / atq)
@@ -240,19 +349,15 @@ agreements_mm <- agreements_compq_merged %>%
 
 # time series plots of the number of credit agreements by year by lender_is_nonbank
 plot_agreements_ts(agreements_mm, lender_is_nonbank)
-ggsave("../Results/Figures/Agreements_by_year_bank_mm.pdf")
-plot_agreements_ts(agreements_mm, lender_is_non_regulated_ib_fc)
-ggsave("../Results/Figures/Agreements_by_year_non_regulated_ib_fc_mm.pdf")
+ggsave(file.path(figure_path, "Agreements_by_year_bank_mm.pdf"))
 plot_agreements_ts(agreements_mm, lender_is_private_credit_entity)
-ggsave("../Results/Figures/Agreements_by_year_private_credit_mm.pdf")
+ggsave(file.path(figure_path, "Agreements_by_year_private_credit_mm.pdf"))
 
 # plot the frequencies of the three variables (monthly_fs, projected_fs, lender_meeting) by year 
 plot_infocov_ts(agreements_mm, lender_is_nonbank)
-ggsave("../Results/Figures/Info_Cov_94to23_mm.pdf")
-plot_infocov_ts(agreements_mm, lender_is_non_regulated_ib_fc)
-ggsave("../Results/Figures/Info_Cov_94to23_non_regulated_ib_fc_mm.pdf")
+ggsave(file.path(figure_path, "Info_Cov_94to23_mm.pdf"))
 plot_infocov_ts(agreements_mm, lender_is_private_credit_entity)
-ggsave("../Results/Figures/Info_Cov_94to23_private_credit_mm.pdf")
+ggsave(file.path(figure_path, "Info_Cov_94to23_private_credit_mm.pdf"))
 
 # merge with annual compustat to get ebitda in the previous year
 compa <- fread("../Data/Raw/compustat_annual.csv") 
@@ -325,18 +430,14 @@ write.csv(agreements_mm_dealinfo, "../Data/Cleaned/agreements_mm_dealinfo.csv", 
 
 # plot with agreements_mm_dealinfo
 plot_infocov_ts(agreements_mm_dealinfo, lender_is_nonbank)
-ggsave("../Results/Figures/Info_Cov_94to23_mm_dealinfo.pdf")
-plot_infocov_ts(agreements_mm_dealinfo, lender_is_non_regulated_ib_fc)
-ggsave("../Results/Figures/Info_Cov_94to23_non_regulated_ib_fc_mm_dealinfo.pdf")
+ggsave(file.path(figure_path, "Info_Cov_94to23_mm_dealinfo.pdf"))
 plot_infocov_ts(agreements_mm_dealinfo, lender_is_private_credit_entity)
-ggsave("../Results/Figures/Info_Cov_94to23_private_credit_mm_dealinfo.pdf")
+ggsave(file.path(figure_path, "Info_Cov_94to23_private_credit_mm_dealinfo.pdf"))
 
 plot_agreements_ts(agreements_mm_dealinfo, lender_is_nonbank)
-ggsave("../Results/Figures/Agreements_by_year_bank_mm_dealinfo.pdf")
-plot_agreements_ts(agreements_mm_dealinfo, lender_is_non_regulated_ib_fc)
-ggsave("../Results/Figures/Agreements_by_year_non_regulated_ib_fc_mm_dealinfo.pdf")
+ggsave(file.path(figure_path, "Agreements_by_year_bank_mm_dealinfo.pdf"))
 plot_agreements_ts(agreements_mm_dealinfo, lender_is_private_credit_entity)
-ggsave("../Results/Figures/Agreements_by_year_private_credit_mm_dealinfo.pdf")
+ggsave(file.path(figure_path, "Agreements_by_year_private_credit_mm_dealinfo.pdf"))
 
 ##################################################
 # Section 3: Table 1/2 (Summary Statistics) and Main Regression

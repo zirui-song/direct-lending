@@ -7,8 +7,9 @@ global datadir "$repodir/Data"
 global rawdir "$datadir/Raw"
 global intdir "$datadir/Intermediate"
 global cleandir "$datadir/Cleaned"
-global tabdir "$repodir/Results/Tables"
-global figdir "$repodir/Results/Figures"
+*global tabdir "$repodir/Results/Tables"
+global tabdir "/Users/zrsong/Dropbox (MIT)/Apps/Overleaf/Information Covenants of Direct Lending/Tables"
+global figdir "/Users/zrsong/Dropbox (MIT)/Apps/Overleaf/Information Covenants of Direct Lending/Tables"
 
 /**************
 	Summary Table
@@ -16,7 +17,7 @@ global figdir "$repodir/Results/Figures"
 
 import delimited "$cleandir/agreements_mm_dealinfo.csv", clear
 keep if year >= 2010
-destring atq-prev_ebitda sich deal_amount1 interest_spread1, replace ignore("NA")
+destring atq-prev_ebitda sich deal_amount1 interest_spread1 lender_is_private_credit, replace ignore("NA")
 drop if atq >= .
 * generate maturity
 replace maturity1 = "" if maturity1 == "NA"
@@ -37,10 +38,6 @@ sicff sich, ind(12)
 
 label define ff_12_lab 1 "Consumer NonDurables" 2 "Consumer Durables" 3 "Manufacturing" 4 "Oil, Gas, and Coal Extraction and Products" 5 "Chemicals and Allied Products" 6 "Business Equipment" 7 "Telephone and Television Transmission" 8 "Utilities" 9 "Wholesale, Retail, and Some Services" 10 "Healthcare, Medical Equipment, and Drugs" 11 "Finance" 12 "Other"
 label values ff_12 ff_12_lab
-
-* generate private_credit vs pure bank comparison
-gen lender_is_private_credit = 1 if lender_is_private_credit_entity == 1
-replace lender_is_private_credit = 0 if lender_is_nonbank == 0
 
 save "$intdir/intermediate_data_after_main_regression.dta", replace
 
@@ -193,18 +190,15 @@ local y_vars "lender_is_nonbank lender_is_private_credit"
 local info_vars "monthly_fs projected_fs lender_meeting hard_info back_info all_info"
 
 foreach var of varlist `info_vars' {
-	eststo: psmatch2 lender_is_private_credit `borr_vars' i.ff_12 `deal_vars', out(`var') logit n(3) ai(3) common caliper(0.01)
+	eststo: psmatch2 lender_is_private_credit `borr_vars' i.ff_12 `deal_vars', out(`var') logit n(1) ai(3) common caliper(0.01)
 }
 estadd scalar r(att)
 estadd scalar r(seatt)
-esttab using "$tabdir/Table5_main_psm.tex", replace drop obslast nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+esttab using "$tabdir/Table5_main_psm.tex", replace obslast nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses star(* 0.10 ** 0.05 *** 0.01) plain lines fragment noconstant
 eststo clear
 
 pstest `borr_vars' `deal_vars', graph both graphregion(color(white)) bgcolor(white)
-
-// Post the results for esttab
-ereturn post b V
-ereturn display
+graph export "$figdir/Figure5_psm.pdf", replace
 
 esttab using "$tabdir/Table5_main_psm.tex", replace nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
 eststo clear
@@ -309,28 +303,73 @@ eststo clear
 * generate large and small private credit lenders	
 bysort lead_arranger: gen deal_count = _N
 tab deal_count if lender_is_private_credit == 1	
-gen big_pc = 1 if lender_is_private_credit == 1 & deal_count >= 4
-replace big_pc = 0 if big_pc ==. 
-gen big_bank = 1 if lender_is_private_credit == 0 & deal_count >= 93
-replace big_bank = 0 if big_bank ==. 
+gen big_pc = 1 if lender_is_private_credit == 1 & deal_count >= 5
+replace big_pc = 0 if big_pc ==. & lender_is_private_credit == 1
 
-keep if lender_is_private_credit == 1
+* generate big_bank == 1 if it's ont of the g-sibs
+* get rid of . 
+replace lead_arranger = subinstr(lead_arranger, ".", "", .)
 
-* manually clean some names 
-replace big_pc = 1 if strpos(lead_arranger, "apollo") > 0
-replace big_pc = 1 if strpos(lead_arranger, "ares") > 0
-replace big_pc = 1 if strpos(lead_arranger, "cortland") > 0
-replace big_pc = 1 if strpos(lead_arranger, "kkr") > 0
-replace big_pc = 1 if strpos(lead_arranger, "oaktree") > 0
+gen big_bank = 1 if strpos(lead_arranger, "bank of america") > 0
+replace big_bank = 1 if strpos(lead_arranger, "bank of america") > 0
+replace big_bank = 1 if strpos(lead_arranger, "bofa securities") > 0
+replace big_bank = 1 if strpos(lead_arranger, "citibank") > 0
+replace big_bank = 1 if strpos(lead_arranger, "citigroup") > 0
+replace big_bank = 1 if strpos(lead_arranger, "citicorp") > 0
+replace big_bank = 1 if strpos(lead_arranger, "credit suisse") > 0
+replace big_bank = 1 if strpos(lead_arranger, "deutsche") > 0
+replace big_bank = 1 if strpos(lead_arranger, "jp morgan") > 0
+replace big_bank = 1 if strpos(lead_arranger, "jpmorgan") > 0
+replace big_bank = 1 if strpos(lead_arranger, "merrill lynch") > 0
+replace big_bank = 1 if strpos(lead_arranger, "morgan stanley") > 0
+replace big_bank = 1 if strpos(lead_arranger, "wells fargo") > 0
+replace big_bank = 1 if strpos(lead_arranger, "goldman sachs") > 0
+replace big_bank = 0 if big_bank == . & lender_is_nonbank == 0
 
-drop if lead_arranger == "wilmington trust"
+preserve 
+	keep if lender_is_private_credit == 0
+	tab lead_arranger lender_meeting
+	tab lead_arranger big_bank
+	* regression	
+	local borr_vars "prev_ebitda atq roa leverage"
+	local deal_vars "deal_amount1 maturity_year interest_spread1"	
+	local y_vars "lender_is_nonbank lender_is_private_credit" 
+	local info_vars "monthly_fs projected_fs lender_meeting hard_info back_info all_info"
+	order lead_arranger `info_vars' `borr_vars' `deal_vars'
+	gsort lead_arranger
+	foreach var of varlist `info_vars' {
+		eststo: reghdfe `var' big_bank `borr_vars' `deal_vars', absorb(year ff_12)
+	}
+	esttab using "$tabdir/Table7_bank.tex", replace ///
+	nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+	star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+	* clear storeed est
+	eststo clear
+restore
 
-* regression	
-local borr_vars "prev_ebitda atq roa leverage"
-local deal_vars "deal_amount1 maturity_year interest_spread1"	
-local y_vars "lender_is_nonbank lender_is_private_credit" 
-local info_vars "monthly_fs projected_fs lender_meeting hard_info back_info all_info"
+preserve
+	keep if lender_is_private_credit == 1
+	* manually clean some names 
+	replace big_pc = 1 if strpos(lead_arranger, "apollo") > 0
+	replace big_pc = 1 if strpos(lead_arranger, "ares") > 0
+	replace big_pc = 1 if strpos(lead_arranger, "cortland") > 0
+	replace big_pc = 1 if strpos(lead_arranger, "kkr") > 0
+	replace big_pc = 1 if strpos(lead_arranger, "oaktree") > 0
+	replace big_pc = 1 if strpos(lead_arranger, "blue torch") > 0
+	replace big_pc = 1 if strpos(lead_arranger, "tcw") > 0
 
-foreach var of varlist `info_vars' {
-	reghdfe `var' big_pc `borr_vars' `deal_vars', absorb(year ff_12)
-}
+	* regression	
+	local borr_vars "prev_ebitda atq roa leverage"
+	local deal_vars "deal_amount1 maturity_year interest_spread1"	
+	local y_vars "lender_is_nonbank lender_is_private_credit" 
+	local info_vars "monthly_fs projected_fs lender_meeting hard_info back_info all_info"
+
+	foreach var of varlist `info_vars' {
+		eststo: reghdfe `var' big_pc `borr_vars' `deal_vars', absorb(year ff_12)
+	}
+	esttab using "$tabdir/Table7_pc.tex", replace ///
+	nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+	star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+	* clear storeed est
+	eststo clear
+restore
