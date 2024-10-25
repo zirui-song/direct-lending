@@ -39,6 +39,32 @@ sicff sich, ind(12)
 label define ff_12_lab 1 "Consumer NonDurables" 2 "Consumer Durables" 3 "Manufacturing" 4 "Oil, Gas, and Coal Extraction and Products" 5 "Chemicals and Allied Products" 6 "Business Equipment" 7 "Telephone and Television Transmission" 8 "Utilities" 9 "Wholesale, Retail, and Some Services" 10 "Healthcare, Medical Equipment, and Drugs" 11 "Finance" 12 "Other"
 label values ff_12 ff_12_lab
 
+egen hard_info = rowmax(monthly_fs projected_fs)
+egen back_info = rowmax(monthly_fs lender_meeting)
+egen all_info = rowmin(monthly_fs projected_fs lender_meeting)
+
+la var lender_is_nonbank "Nonbank Lender"
+la var lender_is_private_credit "Direct Lender"
+la var monthly_fs "Monthly Financial Statement"
+la var projected_fs "Annual Budget/Projection"
+la var lender_meeting "Lender Meeting"
+la var atq "Total Assets (Million USD)"
+la var revtq "Revenue (Million USD)"
+la var niq "Net Income (Million USD)"
+la var ibq "Income Before Extraordinary Items (Million USD)"
+la var ltq "Long-Term Debt (Million USD)"
+la var xrdq "R\&D Intensity"
+la var ppegtq "Tangibility"
+la var roa "ROA"
+la var leverage "Leverage Ratio"
+la var prev_ebitda "Previous Year EBITDA (Million USD)"
+la var maturity_year "Maturity (Years)"
+la var margin_bps "Floating Interest Margin (Basis Points)"
+la var deal_amount1 "Deal Amount (Billion USD)"
+la var interest_spread1 "Interest Margin (Percentage)"
+
+drop if deal_amount1 == .
+
 save "$intdir/intermediate_data_after_main_regression.dta", replace
 
 *** Table 1: Descriptives *** 
@@ -46,39 +72,20 @@ save "$intdir/intermediate_data_after_main_regression.dta", replace
 * Panel A (Number of Deals By Industry)
 dtable i.ff_12, by(lender_is_private_credit) export("$tabdir/tabulation_ff12_nonbank.tex", tableonly replace) note("Panel A: Number of Deals By Industry")
 
-la var lender_is_nonbank "Nonbank Lender"
-la var lender_is_private_credit "Private Credit Lender"
-la var monthly_fs "Monthly Financial Statement"
-la var projected_fs "Annual Budget/Projection"
-la var lender_meeting "Lender Meeting"
-la var atq "Total Assets (Million USD)"
-la var revtq "Revenue (Million USD)"
-la var niq "Net Income (Million USD)"
-la var ibq "Income Before Taxes (Million USD)"
-la var ltq "Long-Term Debt (Million USD)"
-la var xrdq "R\&D"
-la var ppegtq "Tangibility"
-la var roa "ROA"
-la var leverage "Leverage Ratio"
-la var prev_ebitda "Previous Year EBITDA"
-la var maturity_year "Maturity (Years)"
-la var margin_bps "Floating Interest Margin (Basis Points)"
-la var deal_amount1 "Deal Amount (Billion USD)"
-la var interest_spread1 "Interest Margin (Percentage)"
+local all_borr_cov "atq revtq niq roa leverage prev_ebitda xrdq ppegtq"
 
-
-* Panel C (Summary Statistics by Banks and Nonbanks Respectively)
-estpost sum monthly_fs-lender_meeting atq-leverage prev_ebitda if lender_is_nonbank == 0, de
+* Panel B (Summary Statistics by Banks and Nonbanks Respectively)
+estpost sum monthly_fs-lender_meeting `all_borr_cov' if lender_is_nonbank == 0, de
 esttab using "$tabdir/summary_table_by_bank.tex", replace ///
     cells("count(fmt(%9.0fc)) mean(fmt(%9.2f)) sd(fmt(%9.2f)) min(fmt(%9.2f)) p50(fmt(%9.2f)) max(fmt(%9.2f))") noobs nonum collabels(Count Mean "Std. Dev." Min Median Max) title(": Summary Statistics for Banks") label
 	
-estpost sum monthly_fs-lender_meeting atq-leverage prev_ebitda if lender_is_nonbank == 1, de
+estpost sum monthly_fs-lender_meeting `all_borr_cov' if lender_is_nonbank == 1, de
 esttab using "$tabdir/summary_table_by_nonbank.tex", replace ///
      cells("count(fmt(%9.0fc)) mean(fmt(%9.2f)) sd(fmt(%9.2f)) min(fmt(%9.2f)) p50(fmt(%9.2f))  max(fmt(%9.2f))") noobs nonum collabels(Count Mean "Std. Dev." Min Median Max) title(": Summary Statistics for Nonbanks") label
 
-estpost sum monthly_fs-lender_meeting atq-leverage prev_ebitda if lender_is_private_credit_entity == 1, de
+estpost sum monthly_fs-lender_meeting `all_borr_cov' if lender_is_private_credit_entity == 1, de
 esttab using "$tabdir/summary_table_by_private_credit.tex", replace ///
-     cells("count(fmt(%9.0fc)) mean(fmt(%9.2f)) sd(fmt(%9.2f)) min(fmt(%9.2f)) p50(fmt(%9.2f))  max(fmt(%9.2f))") noobs nonum collabels(Count Mean "Std. Dev." Min Median Max) title(": Summary Statistics for Private Credit") label
+     cells("count(fmt(%9.0fc)) mean(fmt(%9.2f)) sd(fmt(%9.2f)) min(fmt(%9.2f)) p50(fmt(%9.2f))  max(fmt(%9.2f))") noobs nonum collabels(Count Mean "Std. Dev." Min Median Max) title(": Summary Statistics for Direct Lenders") label
 
 
 *** Table 2: Borrowers with both ***
@@ -86,13 +93,24 @@ gsort gvkey year
 order lender_is_nonbank coname gvkey year date lead_arranger atq revtq prev_ebitda ff_12 monthly_fs-lender_meeting
 
 /**************
+	Descriptive Figures
+	***************/
+	
+*collapse (sum) deal_amount1, by(year lender_is_private_credit)
+*drop if lender_is_private_credit == .
+
+* Plot deal_amount1 trends for lender_is_private_credit 0 and 1
+*line deal_amount1 year if lender_is_private_credit == 1, lcolor(blue) lpattern(solid) 
+/**************
 	Determinant Tables
 	***************/
 	
 * keep only those with floating rates
 keep if interest_type == "floating"
 replace prev_ebitda = prev_ebitda/atq
+la var prev_ebitda "Previous Year EBITDA (Scaled)"
 replace atq = log(atq)
+la var atq "Ln(Total Assets)"
 	
 gen prev_ebitda_dummy = 1 if prev_ebitda > 0 
 replace prev_ebitda_dummy = 0 if prev_ebitda_dummy == .
@@ -108,10 +126,6 @@ reg projected_fs prev_ebitda atq roa leverage i.ff_12 i.year
 outreg2 using "$tabdir/determinant_info_cov.xls", excel append
 reg lender_meeting prev_ebitda atq roa leverage i.ff_12 i.year
 outreg2 using "$tabdir/determinant_info_cov.xls", excel append
-
-egen hard_info = rowmax(monthly_fs projected_fs)
-egen back_info = rowmax(monthly_fs lender_meeting)
-egen all_info = rowmin(monthly_fs projected_fs lender_meeting)
 
 reg hard_info prev_ebitda atq roa leverage i.ff_12 i.year
 outreg2 using "$tabdir/determinant_info_cov.xls", excel append
@@ -297,10 +311,10 @@ eststo clear
 	Cross-Sectional Tests
 	***************/
 
-*** Large Versus Small Private Credit Lenders
+*** Large Versus Small Direct Lenders Lenders
 	use "$cleandir/final_regression_sample.dta", replace
 	
-* generate large and small private credit lenders	
+* generate large and small Direct Lenders lenders	
 bysort lead_arranger: gen deal_count = _N
 tab deal_count if lender_is_private_credit == 1	
 gen big_pc = 1 if lender_is_private_credit == 1 & deal_count >= 5
@@ -325,6 +339,9 @@ replace big_bank = 1 if strpos(lead_arranger, "morgan stanley") > 0
 replace big_bank = 1 if strpos(lead_arranger, "wells fargo") > 0
 replace big_bank = 1 if strpos(lead_arranger, "goldman sachs") > 0
 replace big_bank = 0 if big_bank == . & lender_is_nonbank == 0
+
+la var big_bank "Big Bank"
+la var big_pc "Big Direct Lender"
 
 preserve 
 	keep if lender_is_private_credit == 0
@@ -373,3 +390,60 @@ preserve
 	* clear storeed est
 	eststo clear
 restore
+
+*** Robustness Using a Larger Sample without covariates on deal_vars
+
+use "$intdir/intermediate_data_after_main_regression.dta", clear
+	keep if lender_is_private_credit == 1
+
+*** different industry from expertise
+	* change industry to ff_12
+	gen industry_12 = 6 if industry == "Business Services" | industry == "Information Technology"
+	replace industry_12 = 1 if industry == "Consumer Discretionary"
+	replace industry_12 = 4 if industry == "Energy & Utilities"
+	replace industry_12 = 11 if industry == "Financial & Insurance Services"
+	replace industry_12 = 10 if industry == "Healthcare"
+	replace industry_12 = 3 if industry == "Industrials"
+	replace industry_12 = 4 if industry == "Raw Materials & Natural Resources"
+	drop if industry_12 == .
+	order industry* ff_12
+	
+	gen same_industry = 1 if industry_12 == ff_12
+	replace same_industry = 0 if same_industry == .
+	reg projected_fs same_industry prev_ebitda atq roa leverage i.year
+	
+*** big vs small	
+
+use "$intdir/intermediate_data_after_main_regression.dta", clear
+	keep if lender_is_private_credit == 1
+	bysort lead_arranger: gen deal_count = _N
+	bysort lead_arranger_cleaned: gen deal_count_c = _N
+	tab deal_count_c
+	gen big_pc = 1 if lender_is_private_credit == 1 & deal_count >= 5
+	replace big_pc = 0 if big_pc ==. & lender_is_private_credit == 1
+	* manually clean some names 
+	replace big_pc = 1 if strpos(lead_arranger, "apollo") > 0
+	replace big_pc = 1 if strpos(lead_arranger, "ares") > 0
+	replace big_pc = 1 if strpos(lead_arranger, "cortland") > 0
+	replace big_pc = 1 if strpos(lead_arranger, "kkr") > 0
+	replace big_pc = 1 if strpos(lead_arranger, "oaktree") > 0
+	replace big_pc = 1 if strpos(lead_arranger, "blue torch") > 0
+	replace big_pc = 1 if strpos(lead_arranger, "tcw") > 0
+	replace big_pc = 1 if strpos(lead_arranger, "alter domus") > 0
+	replace big_pc = 1 if strpos(lead_arranger, "blackrock") > 0
+	replace big_pc = 1 if strpos(lead_arranger, "blackstone") > 0
+	tab big_pc
+	
+		* regression	
+	local borr_vars "prev_ebitda atq roa leverage"
+	local deal_vars "deal_amount1 maturity_year interest_spread1"	
+	local info_vars "monthly_fs projected_fs lender_meeting hard_info back_info all_info"
+
+	foreach var of varlist `info_vars' {
+		eststo: reghdfe `var' big_pc `borr_vars', absorb(year ff_12)
+	}
+	esttab using "$tabdir/Table7_pc_robust.tex", replace ///
+	nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+	star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+	* clear storeed est
+	eststo clear

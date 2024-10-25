@@ -38,24 +38,55 @@ figure_path <- "/Users/zrsong/Dropbox (MIT)/Apps/Overleaf/Information Covenants 
 # save as csv
 #write.csv(cleaned_loancontracts, "../Data/LoansFull/cleaned_loancontracts.csv", row.names = FALSE)
 
+### inner join agreements_mm with combined_loancontracts to get text so that I can use to extract deal information
+#cleaned_loancontracts <- fread("../Data/LoansFull/cleaned_loancontracts.csv")
+# check if contracts have amendments (include words such as 'amendment', 'amended', 'amends', 'restatement', 'restated', 'restates') in the first 1000 characters
+#cleaned_loancontracts <- cleaned_loancontracts %>%
+#  mutate(is_amendment = ifelse(str_detect(str_sub(text, 1, 1000), "amendment|amended|amends|restatement|restated|restates"), 1, 0))
+#cleaned_loancontracts_mm <- cleaned_loancontracts %>%
+#  inner_join(agreements_mm %>% select(accession, type_filing, type_attachment), by = c("accession", "type_filing", "type_attachment"))
+# keep only non-amendment contracts
+#cleaned_loancontracts_mm <- cleaned_loancontracts_mm %>%
+#  filter(is_amendment == 0)
+# save as csv
+#write.csv(cleaned_loancontracts_mm, "../Data/LoansFull/combined_loancontracts_mm.csv", row.names = FALSE)
+# read in cleaned_loancontracts_mm
+cleaned_loancontracts_mm <- fread("../Data/LoansFull/combined_loancontracts_mm.csv")
+# check for unique years 
+cleaned_loancontracts_mm %>%
+  summarise(min_year = min(year), max_year = max(year))
+
 ##################################################
-# Section 0.1: Clean Preqin Fund Names 
+  # Section 0.1: Clean Preqin Fund Names 
 ##################################################
+
+pattern <- "\\s*(\\b(?:llc|lp|ag|limited|plc|iv|co|gp|spv|inc)\\b)$"
 
 preqin <- read_excel("../Data/Raw/Preqin_deals_export-10-23-2024-1857.xlsx")
 names(preqin) <- tolower(names(preqin))
 
 # keep only the needed columns
-preqin_names <- preqin[, c("portfolio company", "portfolio company city", "portfolio company state/ county", 
+preqin_names <- preqin[, c("portfolio company", "portfolio company city", "portfolio company state/ county", "debt provider id",
                            "debt provider name", "debt provider city", "debt provider state/ county", "industry classification")]
 # rename the above columns
-colnames(preqin_names) <- c("company_name", "company_city", "company_state", "lender_name", "lender_city", "lender_state", "industry")
+colnames(preqin_names) <- c("company_name", "company_city", "company_state", "lender_id", "lender_name", "lender_city", "lender_state", "industry")
 # change lender_name to lower case
 preqin_names <- preqin_names %>%
   mutate(lender_name = tolower(lender_name))
+# Clean lender_names using the pattern above as well
+preqin_names <- preqin_names %>%
+  mutate(lender_name_cleaned = str_replace_all(lender_name, "\\.", "")) %>%
+  mutate(lender_name_cleaned = str_trim(str_remove_all(lender_name_cleaned, pattern), side = "both"))
+# generate most common industry within each lender_name
+preqin_names <- preqin_names %>%
+  group_by(lender_name_cleaned) %>%
+  summarise(industry = names(which.max(table(industry))))
+# check unique industries
+preqin_names %>%
+  summarise(n_distinct(industry))
 # generate lender_names as all lender_name in preqin_names
 lender_names <- preqin_names %>%
-  select(lender_name) %>%
+  select(lender_name_cleaned) %>%
   distinct()
 
 ##################################################
@@ -166,12 +197,12 @@ agreements <- agreements %>%
 agreements <- agreements %>%
   mutate(lender_is_private_credit_entity = ifelse(str_detect(lead_arranger, regex(private_credit_entities_pattern, ignore_case = TRUE)), 1, 0))
 
+###############################################################################################
 # NEW FROM OCT 23RD (Use Pitchbook lender_name fuzzy matched to lead_arranger to identify private credit entities))
 
 # Define a regular expression pattern to match unwanted suffixes at the end of the string
 agreements <- agreements %>%
   mutate(lead_arranger_cleaned = str_replace_all(lead_arranger, "\\.", ""))
-pattern <- "\\s*(\\b(?:llc|lp|ag|limited|plc|iv|co|gp|spv|inc)\\b)$"
 
 # Clean the 'lead_arranger_cleaned' column by removing the unwanted suffixes
 agreements <- agreements %>%
@@ -181,11 +212,6 @@ agreements <- agreements %>%
 unique_lender_names <- agreements %>%
   select(lead_arranger_cleaned) %>%
   distinct()
-
-#Clean lender_names using the pattern above as well
-lender_names <- lender_names %>%
-  mutate(lender_name_cleaned = str_replace_all(lender_name, "\\.", "")) %>%
-  mutate(lender_name_cleaned = str_trim(str_remove_all(lender_name_cleaned, pattern), side = "both"))
 
 ###
 fuzzy_matched_lenders <- stringdist_join(
@@ -210,9 +236,14 @@ fuzzy_matched_lenders <- fuzzy_matched_lenders %>%
 # make sure each lead_arranger_cleaned is unique
 fuzzy_matched_lenders <- fuzzy_matched_lenders %>%
   distinct(lead_arranger_cleaned, .keep_all = TRUE)
+
 # merge this list back to agreements
 agreements <- agreements %>%
   left_join(fuzzy_matched_lenders, by = c("lead_arranger_cleaned" = "lead_arranger_cleaned"))
+# merge the lender_name_cleaned back to preqin_names to get industry
+agreements <- agreements %>%
+  left_join(preqin_names, by = c("lender_name_cleaned" = "lender_name_cleaned"))
+
 # generate a variable that indicates whether the lender is a private credit entity (dist != NA and not a bank)
 agreements <- agreements %>%
   mutate(lender_is_private_credit_entity_pitchbook = ifelse(!is.na(dist) & lender_is_nonbank == 1, 1, 0))
@@ -324,13 +355,12 @@ ggsave(file.path(figure_path, "Info_Cov_94to23_private_credit.pdf"))
 
 # import compustat quarterly data
 compq <- fread("../Data/Raw/compustat_quarterly.csv")
-# use slice(1) to keep only the first row of each gvkey-year pair
-compq <- compq %>%
-  group_by(gvkey, fyearq, fqtr) %>%
-  slice(1)
+# check for years in compq
+compq %>%
+  summarise(min_year = min(fyearq), max_year = max(fyearq))
 # merge with filing data
 agreements_compq_merged <- agreements %>%
-  left_join(compq %>% select(gvkey, fyearq, fqtr, atq, revtq, niq, ibq, ltq, xrdq, xrdy, ppegtq, ppentq, mkvaltq, prccq, cshoq, ), 
+  left_join(compq %>% select(gvkey, fyearq, fqtr, atq, revtq, niq, ibq, ltq, xrdq, xrdy, ppegtq, ppentq, mkvaltq, prccq, cshoq, be), 
             by = c("gvkey" = "gvkey", "year" = "fyearq", "quarter" = "fqtr"))
 # calculate ROA
 agreements_compq_merged <- agreements_compq_merged %>%
@@ -342,6 +372,12 @@ agreements_compq_merged <- agreements_compq_merged %>%
 agreements_compq_merged <- agreements_compq_merged %>%
   mutate(xrdq = xrdq / atq,
          ppegtq = ppegtq / atq)
+# replace mkvaltq with prccq * cshoq if mkvaltq is NA
+agreements_compq_merged <- agreements_compq_merged %>%
+  mutate(mkvaltq = ifelse(is.na(mkvaltq), prccq * cshoq, mkvaltq))
+# calculate market-to-book
+agreements_compq_merged <- agreements_compq_merged %>%
+  mutate(market_to_book = mkvaltq / be)
 
 # keep only those firms with revenue between 10,000,000 and 1,000,000,000
 agreements_mm <- agreements_compq_merged %>%
@@ -387,19 +423,6 @@ agreements_mm <- agreements_mm %>%
   left_join(compa %>% select(gvkey, fyear, prev_at, prev_ebitda, sich), by = c("gvkey" = "gvkey", "year" = "fyear"))
 # save as csv
 write.csv(agreements_mm, "../Data/Cleaned/agreements_mm.csv", row.names = FALSE)
-
-### inner join agreements_mm with combined_loancontracts to get text so that I can use to extract deal information
-cleaned_loancontracts <- fread("../Data/LoansFull/cleaned_loancontracts.csv")
-# check if contracts have amendments (include words such as 'amendment', 'amended', 'amends', 'restatement', 'restated', 'restates') in the first 1000 characters
-cleaned_loancontracts <- cleaned_loancontracts %>%
-  mutate(is_amendment = ifelse(str_detect(str_sub(text, 1, 1000), "amendment|amended|amends|restatement|restated|restates"), 1, 0))
-cleaned_loancontracts_mm <- cleaned_loancontracts %>%
-  inner_join(agreements_mm %>% select(accession, type_filing, type_attachment), by = c("accession", "type_filing", "type_attachment"))
-# keep only non-amendment contracts
-cleaned_loancontracts_mm <- cleaned_loancontracts_mm %>%
-  filter(is_amendment == 0)
-# save as csv
-write.csv(cleaned_loancontracts_mm, "../Data/LoansFull/combined_loancontracts_mm.csv", row.names = FALSE)
 
 ### merge agreements_mm with deal information to arrive at the final dataset that includes only new contracts with deal information
 new_loancontracts_mm_dealinfo <- fread("../Data/LoansFull/loancontracts_with_extracted_dealinfo_final.csv")
