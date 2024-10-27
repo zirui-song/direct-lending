@@ -51,10 +51,13 @@ figure_path <- "/Users/zrsong/Dropbox (MIT)/Apps/Overleaf/Information Covenants 
 # save as csv
 #write.csv(cleaned_loancontracts_mm, "../Data/LoansFull/combined_loancontracts_mm.csv", row.names = FALSE)
 # read in cleaned_loancontracts_mm
+
 cleaned_loancontracts_mm <- fread("../Data/LoansFull/combined_loancontracts_mm.csv")
-# check for unique years 
-cleaned_loancontracts_mm %>%
-  summarise(min_year = min(year), max_year = max(year))
+# check for unique years and number of observations by year
+# Count number of observations by year
+cleaned_loancontracts_mm <- cleaned_loancontracts_mm %>%
+  group_by(year) %>%
+  summarise(count = n())
 
 ##################################################
   # Section 0.1: Clean Preqin Fund Names 
@@ -425,7 +428,11 @@ agreements_mm <- agreements_mm %>%
 write.csv(agreements_mm, "../Data/Cleaned/agreements_mm.csv", row.names = FALSE)
 
 ### merge agreements_mm with deal information to arrive at the final dataset that includes only new contracts with deal information
-new_loancontracts_mm_dealinfo <- fread("../Data/LoansFull/loancontracts_with_extracted_dealinfo_final.csv")
+new_loancontracts_mm_dealinfo <- fread("../Data/LoansFull/loancontracts_with_extracted_dealinfo_oct26_update.csv")
+# number of observations each year
+new_loancontracts_mm_dealinfo_count <- new_loancontracts_mm_dealinfo %>%
+  group_by(year) %>%
+  summarise(count = n())
 
 new_loancontracts_mm_dealinfo <- new_loancontracts_mm_dealinfo %>%
   select(accession, type_filing, type_attachment, deal_amount, interest_spread, maturity)

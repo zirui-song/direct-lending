@@ -67,6 +67,10 @@ drop if deal_amount1 == .
 
 save "$intdir/intermediate_data_after_main_regression.dta", replace
 
+*** check for missing interest_spread1
+order lender_is_private_credit deal_amount-maturity1 
+keep if maturity_date == .
+
 *** Table 1: Descriptives *** 
 
 * Panel A (Number of Deals By Industry)
@@ -433,8 +437,9 @@ use "$intdir/intermediate_data_after_main_regression.dta", clear
 	replace big_pc = 1 if strpos(lead_arranger, "blackrock") > 0
 	replace big_pc = 1 if strpos(lead_arranger, "blackstone") > 0
 	tab big_pc
+	la var big_pc "Big Direct Lender"
 	
-		* regression	
+	* regression	
 	local borr_vars "prev_ebitda atq roa leverage"
 	local deal_vars "deal_amount1 maturity_year interest_spread1"	
 	local info_vars "monthly_fs projected_fs lender_meeting hard_info back_info all_info"
