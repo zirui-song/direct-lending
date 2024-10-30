@@ -52,15 +52,15 @@ figure_path <- "/Users/zrsong/Dropbox (MIT)/Apps/Overleaf/Information Covenants 
 #write.csv(cleaned_loancontracts_mm, "../Data/LoansFull/combined_loancontracts_mm.csv", row.names = FALSE)
 # read in cleaned_loancontracts_mm
 
-cleaned_loancontracts_mm <- fread("../Data/LoansFull/combined_loancontracts_mm.csv")
+#cleaned_loancontracts_mm <- fread("../Data/LoansFull/combined_loancontracts_mm.csv")
 # check for unique years and number of observations by year
 # Count number of observations by year
-cleaned_loancontracts_mm <- cleaned_loancontracts_mm %>%
-  group_by(year) %>%
-  summarise(count = n())
+#cleaned_loancontracts_mm <- cleaned_loancontracts_mm %>%
+#  group_by(year) %>%
+#  summarise(count = n())
 
 ##################################################
-  # Section 0.1: Clean Preqin Fund Names 
+  # Section 0.1: Clean Preqin Fund Names a
 ##################################################
 
 pattern <- "\\s*(\\b(?:llc|lp|ag|limited|plc|iv|co|gp|spv|inc)\\b)$"
@@ -80,13 +80,22 @@ preqin_names <- preqin_names %>%
 preqin_names <- preqin_names %>%
   mutate(lender_name_cleaned = str_replace_all(lender_name, "\\.", "")) %>%
   mutate(lender_name_cleaned = str_trim(str_remove_all(lender_name_cleaned, pattern), side = "both"))
-# generate most common industry within each lender_name
+# generate top 3 most common industry within each lender_name
 preqin_names <- preqin_names %>%
-  group_by(lender_name_cleaned) %>%
-  summarise(industry = names(which.max(table(industry))))
+  group_by(lender_name_cleaned, industry) %>% 
+  summarise(count = n(), .groups = 'drop') %>%   # Count occurrences of each industry per lender
+  arrange(lender_name_cleaned, desc(count)) %>%   # Arrange by lender and descending count
+  group_by(lender_name_cleaned) %>% 
+  slice_max(order_by = count, n = 3, with_ties = FALSE) %>% # Select top 3 industries
+  mutate(rank = row_number()) %>%   # Rank the top industries as 1, 2, 3
+  ungroup() %>%
+  select(-count) # Optionally remove count column if not needed
+# Reshape to wide format
+preqin_names <- preqin_names %>%
+  pivot_wider(names_from = rank, values_from = industry, names_prefix = "industry_")
 # check unique industries
 preqin_names %>%
-  summarise(n_distinct(industry))
+  summarise(n_distinct(industry_1), n_distinct(industry_2), n_distinct(industry_3))
 # generate lender_names as all lender_name in preqin_names
 lender_names <- preqin_names %>%
   select(lender_name_cleaned) %>%
@@ -266,8 +275,6 @@ agreements <- agreements %>%
 agreements <- agreements %>%
   arrange(lender_is_nonbank, lender_is_non_regulated_ib_fc, lender_is_private_credit_entity, lender_is_private_credit_entity_pitchbook, lender_is_private_credit)
 
-### Time Series Plots of Use of Covenants
-# generate year from date
 agreements <- agreements %>%
   mutate(year = year(date),
          quarter = quarter(date))
@@ -361,6 +368,22 @@ compq <- fread("../Data/Raw/compustat_quarterly.csv")
 # check for years in compq
 compq %>%
   summarise(min_year = min(fyearq), max_year = max(fyearq))
+# replace xrdq = 0 if missing
+compq <- compq %>%
+  mutate(xrdq = ifelse(is.na(xrdq), 0, xrdq))
+# fill missing value of ppegtq with previous of next value of year quarter
+compq <- compq %>%
+  group_by(gvkey) %>%
+  arrange(gvkey, fyearq, fqtr) %>%
+  fill(ppegtq, .direction = "downup")
+# fill still-missing values with ppentq (net ppe)
+compq <- compq %>%
+  mutate(ppegtq = ifelse(is.na(ppegtq), ppentq, ppegtq))
+compq <- compq %>%
+  group_by(gvkey) %>%
+  arrange(gvkey, fyearq, fqtr) %>%
+  fill(ppegtq, .direction = "downup")
+
 # merge with filing data
 agreements_compq_merged <- agreements %>%
   left_join(compq %>% select(gvkey, fyearq, fqtr, atq, revtq, niq, ibq, ltq, xrdq, xrdy, ppegtq, ppentq, mkvaltq, prccq, cshoq, be), 
@@ -403,13 +426,6 @@ compa <- fread("../Data/Raw/compustat_annual.csv")
 # select only gvkey, fyear, at, and ebitda
 compa <- compa %>%
   select(gvkey, fyear, at, ebitda, sich)
-# drop NA
-compa <- compa %>%
-  filter(!is.na(at) & !is.na(ebitda))
-# select the largest of ebitda in each gvkey fyear
-compa <- compa %>%
-  group_by(gvkey, fyear) %>%
-  slice(which.max(ebitda))
 # fill in sich with sich from other years if it's NA
 compa <- compa %>%
   group_by(gvkey) %>%
@@ -420,10 +436,19 @@ compa <- compa %>%
   arrange(gvkey, fyear) %>%
   mutate(prev_at = lag(at),
          prev_ebitda = lag(ebitda))
+# change prev_ebitda and prev_at to ebitda and at if missing
+compa <- compa %>%
+  mutate(prev_at = ifelse(is.na(prev_at), at, prev_at),
+         prev_ebitda = ifelse(is.na(prev_ebitda), ebitda, prev_ebitda))
 
 # merge with agreements_mm
 agreements_mm <- agreements_mm %>%
   left_join(compa %>% select(gvkey, fyear, prev_at, prev_ebitda, sich), by = c("gvkey" = "gvkey", "year" = "fyear"))
+
+# check for missing prev_ebitda observations in a separate dataset
+missing_ppe <- agreements_mm %>%
+  filter(is.na(ppegtq))
+
 # save as csv
 write.csv(agreements_mm, "../Data/Cleaned/agreements_mm.csv", row.names = FALSE)
 
@@ -468,6 +493,52 @@ plot_agreements_ts(agreements_mm_dealinfo, lender_is_nonbank)
 ggsave(file.path(figure_path, "Agreements_by_year_bank_mm_dealinfo.pdf"))
 plot_agreements_ts(agreements_mm_dealinfo, lender_is_private_credit_entity)
 ggsave(file.path(figure_path, "Agreements_by_year_private_credit_mm_dealinfo.pdf"))
+
+##################################################
+# Section 2.1: Clean LIBOR Rate Datasets
+##################################################
+libor1 <- fread("../Data/Raw/LIOR3M.csv")
+colnames(libor1) <- c("date", "rate")
+libor2 <- fread("../Data/Raw/3-month-libor-rate-historical-chart.csv", skip = 15, fill=TRUE)
+colnames(libor2) <- c("date", "rate")
+libor3 <- fread("../Data/Raw/AMERIBOR.csv")
+colnames(libor3) <- c("date", "rate")
+# append libor1 and libor3 first
+libor <- rbind(libor1, libor3)
+libor <- libor %>%
+  mutate(year = year(date),
+         quarter = quarter(date))
+
+# generate year and quarter for libor2
+libor2 <- libor2 %>%
+  mutate(year = year(date),
+         quarter = quarter(date))
+# keep only year-quarter from 2016Q4 to 2019Q4
+libor2 <- libor2 %>%
+  filter(year >= 2017 & year <= 2019)
+# for each year-quarter keep only the first observation
+libor2 <- libor2 %>%
+  group_by(year, quarter) %>%
+  slice(1)
+# drop 2019Q4
+libor2 <- libor2 %>%
+  filter(!(year == 2019 & quarter == 4))
+# append with libor
+libor <- rbind(libor, libor2)
+# change rate to numeric
+libor <- libor %>%
+  mutate(rate = as.numeric(rate))
+# remove date
+libor <- libor %>%
+  select(-date)
+# save as csv
+write.csv(libor, "../Data/Cleaned/libor3_rates.csv", row.names = FALSE)
+
+# merge with agreements_mm_dealinfo
+agreements_mm_dealinfo_libor <- agreements_mm_dealinfo %>%
+  left_join(libor, by = c("year" = "year", "quarter" = "quarter"))
+write.csv(agreements_mm_dealinfo_libor, "../Data/Cleaned/agreements_mm_dealinfo.csv", row.names = FALSE)
+
 
 ##################################################
 # Section 3: Table 1/2 (Summary Statistics) and Main Regression
