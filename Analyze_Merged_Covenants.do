@@ -293,22 +293,16 @@ eststo clear
 	Main Regression Table 
 	***************/
 	
-reg monthly_fs lender_is_private_credit_entity `borr_vars' `deal_vars' i.ff_12 i.year, vce(cluster year)
-outreg2 using "$tabdir/main_regression.xls", excel replace
-reg projected_fs lender_is_private_credit_entity `borr_vars' `deal_vars'  i.ff_12 i.year, vce(cluster year)
-outreg2 using "$tabdir/main_regression.xls", excel append
+*** Main (Table IV-All (all nonbank lenders))
 
-reg lender_meeting lender_is_private_credit_entity `borr_vars' `deal_vars'  i.ff_12 i.year, vce(cluster year)
-outreg2 using "$tabdir/main_regression.xls", excel append
-
-reg hard_info lender_is_private_credit_entity `borr_vars' `deal_vars' i.ff_12 i.year, vce(cluster year)
-outreg2 using "$tabdir/main_regression.xls", excel append
-
-reg back_info lender_is_private_credit_entity `borr_vars' `deal_vars' i.ff_12 i.year, vce(cluster year)
-outreg2 using "$tabdir/main_regression.xls", excel append
-
-reg all_info lender_is_private_credit_entity `borr_vars' `deal_vars' i.ff_12 i.year, vce(cluster year)
-outreg2 using "$tabdir/main_regression.xls", excel append
+foreach var of varlist `info_vars' {
+	eststo: reghdfe `var' lender_is_nonbank `borr_vars' `deal_vars', absorb(ff_12 year)
+}
+esttab using "$tabdir/Table4_main_regression_all.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+* clear storeed est
+eststo clear
 
 *** Main (Table IV)
 
