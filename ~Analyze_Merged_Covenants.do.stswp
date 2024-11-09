@@ -139,7 +139,7 @@ la var deal_amount1 "Deal Amount (Million USD)"
 la var interest_spread1 "Interest Margin (Percentage)"
 la var floating "Floating Rate"
 la var asset_based "Asset Based Loan"
-la var second_lien "Second Lien"
+la var second_li
 
 * Panel A (Number of Deals By Industry)
 dtable i.ff_12, by(lender_is_nonbank) export("$tabdir/tabulation_ff12_all.tex", tableonly replace) note("Panel A: Number of Deals By Industry")
@@ -147,7 +147,7 @@ dtable i.ff_12, by(lender_is_private_credit) export("$tabdir/tabulation_ff12_pc.
 dtable i.ff_12, by(lender_is_other_nonbank) export("$tabdir/tabulation_ff12_other.tex", tableonly replace) note("Panel A: Number of Deals By Industry")
 
 local all_borr_cov "atq revtq niq roa leverage prev_ebitda xrdq ppegtq"
-local all_deal_vars "deal_amount1 maturity_year interest_spread1 floating asset_based second_lien" 	 
+local all_deal_vars "deal_amount1 maturity_year interest_spread1 floating asset_based" 	 
 
 * Panel B (Summary Statistics by Banks and Nonbanks Respectively)
 estpost sum monthly_fs-lender_meeting `all_borr_cov' `all_deal_vars' if lender_is_nonbank == 0, de

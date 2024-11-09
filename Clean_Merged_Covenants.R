@@ -425,11 +425,11 @@ ggsave(file.path(figure_path, "Info_Cov_94to23_private_credit_mm.pdf"))
 compa <- fread("../Data/Raw/compustat_annual.csv") 
 # select only gvkey, fyear, at, and ebitda
 compa <- compa %>%
-  select(gvkey, fyear, at, ebitda, sich)
-# fill in sich with sich from other years if it's NA
+  select(gvkey, fyear, at, ebitda, sic)
+# fill in sic with sic from other years if it's NA
 compa <- compa %>%
   group_by(gvkey) %>%
-  fill(sich, .direction = "downup")
+  fill(sic, .direction = "downup")
 # generate prev year atq and ebitda and sich within each gvkey group
 compa <- compa %>%
   group_by(gvkey) %>%
