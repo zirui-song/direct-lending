@@ -430,7 +430,7 @@ compa <- compa %>%
 compa <- compa %>%
   group_by(gvkey) %>%
   fill(sic, .direction = "downup")
-# generate prev year atq and ebitda and sich within each gvkey group
+# generate prev year atq and ebitda and sic within each gvkey group
 compa <- compa %>%
   group_by(gvkey) %>%
   arrange(gvkey, fyear) %>%
@@ -443,7 +443,7 @@ compa <- compa %>%
 
 # merge with agreements_mm
 agreements_mm <- agreements_mm %>%
-  left_join(compa %>% select(gvkey, fyear, prev_at, prev_ebitda, sich), by = c("gvkey" = "gvkey", "year" = "fyear"))
+  left_join(compa %>% select(gvkey, fyear, prev_at, prev_ebitda, sic), by = c("gvkey" = "gvkey", "year" = "fyear"))
 
 # check for missing prev_ebitda observations in a separate dataset
 missing_ppe <- agreements_mm %>%

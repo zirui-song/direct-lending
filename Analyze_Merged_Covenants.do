@@ -10,6 +10,9 @@ global cleandir "$datadir/Cleaned"
 *global tabdir "$repodir/Results/Tables"
 global tabdir "/Users/zrsong/Dropbox (MIT)/Apps/Overleaf/Information Covenants of Direct Lending/Tables"
 global figdir "/Users/zrsong/Dropbox (MIT)/Apps/Overleaf/Information Covenants of Direct Lending/Figures"
+global logdir "$repodir/Code/LogFiles"
+
+log using "$logdir/Analyze_Merged_Covenants.log", text replace
 
 /**************
 	Data Cleaning
@@ -119,7 +122,7 @@ save "$intdir/intermediate_data_after_main_regression.dta", replace
 
 la var lender_is_other_nonbank "Other Nonbank Lender"
 la var lender_is_nonbank "Nonbank Lender"
-la var lender_is_private_credit "Direct Lender"
+la var lender_is_private_credit "Private Credit Lender"
 la var monthly_fs "Monthly Financial Statement"
 la var projected_fs "Annual Budget/Projection"
 la var lender_meeting "Lender Meeting"
@@ -262,7 +265,7 @@ use "$intdir/intermediate_data_after_main_regression.dta", clear
 
 la var lender_is_nonbank "Nonbank Lender"
 la var lender_is_other_nonbank "Other Nonbank Lender"
-la var lender_is_private_credit "Direct Lender"
+la var lender_is_private_credit "Private Credit Lender"
 la var monthly_fs "Monthly Financial Statement"
 la var projected_fs "Annual Budget/Projection"
 la var lender_meeting "Lender Meeting"
@@ -354,14 +357,13 @@ eststo clear
 foreach var of varlist `info_vars' {
 	eststo: reghdfe `var' lender_is_private_credit `borr_vars' `deal_vars', absorb(ff_12 year)
 }
-esttab using "$tabdir/Table4_main_regression.tex", replace ///
+esttab using "$tabdir/Table4_main_regression_pc.tex", replace ///
 nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
 star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
 * clear storeed est
 eststo clear
 
 *** Main (Table IV-1 (for other nonbanks))
-	use "$cleandir/final_regression_sample.dta", clear
 
 foreach var of varlist `info_vars' {
 	eststo: reghdfe `var' lender_is_other_nonbank `borr_vars' `deal_vars', absorb(ff_12 year)
@@ -372,14 +374,29 @@ star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
 * clear storeed est
 eststo clear
 
-*** Propensity Score Matching
+*** Main regression with lender_is_nonbank and lender_is_private_credit in the same table
 
-	use "$cleandir/final_regression_sample.dta", clear
+gen nonbank_pc_inter = lender_is_nonbank * lender_is_private_credit
+replace nonbank_pc_inter = 0 if nonbank_pc_inter == .
+la var nonbank_pc_inter "Nonbank Lender * Private Credit"
 
 local borr_vars "scaled_ebitda ln_atq roa leverage"
 local deal_vars "ln_deal_amount maturity_year interest_spread1"	
 local y_vars "lender_is_nonbank lender_is_private_credit" 
 local info_vars "monthly_fs projected_fs lender_meeting hard_info info_n all_info"
+
+foreach var of varlist `info_vars' {
+	eststo: reghdfe `var' lender_is_nonbank nonbank_pc_inter `borr_vars' `deal_vars', absorb(ff_12 year)
+}
+esttab using "$tabdir/Table4_main_regression.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+* clear storeed est
+eststo clear
+
+*** Propensity Score Matching
+
+	use "$cleandir/final_regression_sample.dta", clear
 
 foreach var of varlist `info_vars' {
 	eststo: psmatch2 lender_is_nonbank `borr_vars' i.ff_12 `deal_vars', out(`var') logit n(1) ai(3) common caliper(0.01)
@@ -401,7 +418,7 @@ esttab using "$tabdir/Table5_main_psm_pc.tex", replace obslast nodepvars nomti n
 eststo clear
 
 pstest `borr_vars' `deal_vars', graph both graphregion(color(white)) bgcolor(white)
-graph export "$figdir/Figure5_psm.pdf", replace
+graph export "$figdir/Figure5_psm_pc.pdf", replace
 
 foreach var of varlist `info_vars' {
 	eststo: psmatch2 lender_is_other_nonbank `borr_vars' i.ff_12 `deal_vars', out(`var') logit n(1) ai(3) common caliper(0.01)
@@ -420,7 +437,8 @@ graph export "$figdir/Figure5_psm_other.pdf", replace
 	***************/
 	use "$cleandir/final_regression_sample.dta", clear
 	
-drop if debt_to_ebitda == 0
+drop if asset_based == 1
+drop if debt_to_ebitda <= 4
 * check for binds around debt_to_ebitda_gr6
 egen debt_to_ebitda_bins = cut(debt_to_ebitda), at(2 4 6 8 10 15 20 25 30 35 40)
 preserve
@@ -445,7 +463,7 @@ histogram prev_ebitda, bin(50) normal kdensity freq
 
 rddensity prev_ebitda, c(0) plot
 
-rdrobust lender_is_private_credit prev_ebitda, c(0)
+rdrobust lender_is_nonbank prev_ebitda, c(0)
 rdrobust monthly_fs prev_ebitda, c(0) fuzzy(lender_is_nonbank)
 
 /**************
@@ -454,11 +472,9 @@ rdrobust monthly_fs prev_ebitda, c(0) fuzzy(lender_is_nonbank)
 	
 *** in 2018 from SNC increase from $20 to $100 million	
 use "$cleandir/final_regression_sample.dta", clear
+drop if asset_based == 1
 
 *** generate treat and post variables 
-
-*gen treat = 1 if inrange(deal_amount1, 20, 100)
-*replace treat = 0 if treat == .
 
 gen post = 1 if year > 2013
 replace post = 0 if post == .
@@ -468,7 +484,7 @@ gen treat_post = debt_to_ebitda_gr6 * post
 *TWFE
 reghdfe lender_is_private_credit debt_to_ebitda_gr6 post treat_post deal_amount1 maturity_year interest_spread1 ln_atq leverage, absorb(year ff_12)
 */
-reghdfe monthly_fs debt_to_ebitda_gr6 post treat_post deal_amount1 maturity_year interest_spread1 ln_atq leverage, absorb(year ff_12)
+reghdfe monthly_fs debt_to_ebitda_gr6 post treat_post deal_amount1 maturity_year interest_spread1 ln_atq leverage, absorb(gvkey ff_12)
 
 *** in 2013 SNC guideline says that firms with <0 ebitda is substandard -> after 2013 firms
 *	with < 0 ebitda is less likely to borrow from banks and more likely to borrow from PCs
@@ -486,7 +502,7 @@ replace post = 0 if post == .
 gen treat_post = treat * post
 
 * Year-Indutry FE with Treat and Treat_Post
-reghdfe lender_is_private_credit treat post treat_post maturity_year interest_spread1, absorb(year ff_12)
+reghdfe lender_is_nonbank treat post treat_post maturity_year interest_spread1, absorb(year ff_12)
 reghdfe monthly_fs treat post treat_post maturity_year interest_spread1, absorb(year ff_12)
 
 * Year-Indutry FE with Treat and Treat_Post
@@ -504,7 +520,6 @@ star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
 * clear storeed est
 eststo clear
 
-
 * fuzzy DID
 *sort treat year
 *by treat year: egen mean_D = mean(lender_is_private_credit)
@@ -519,15 +534,20 @@ eststo clear
 /**************
 	Cross-Sectional Tests
 	***************/
+	
+local borr_vars "scaled_ebitda ln_atq roa leverage"
+local deal_vars "ln_deal_amount maturity_year interest_spread1"	
+local y_vars "lender_is_nonbank lender_is_private_credit" 
+local info_vars "monthly_fs projected_fs lender_meeting hard_info info_n all_info"
 
 *** Large Versus Small Direct Lenders Lenders
 	use "$cleandir/final_regression_sample.dta", replace
 	
 * generate large and small Direct Lenders lenders	
 bysort lead_arranger: gen deal_count = _N
-tab deal_count if lender_is_private_credit == 1	
-gen big_pc = 1 if lender_is_private_credit == 1 & deal_count >= 5
-replace big_pc = 0 if big_pc ==. & lender_is_private_credit == 1
+tab deal_count if lender_is_nonbank == 1	
+gen big_nonbank = 1 if lender_is_nonbank == 1 & deal_count >= 5
+replace big_nonbank = 0 if big_nonbank ==. & lender_is_nonbank == 1
 
 * generate big_bank == 1 if it's ont of the g-sibs
 * get rid of . 
@@ -550,10 +570,23 @@ replace big_bank = 1 if strpos(lead_arranger, "goldman sachs") > 0
 replace big_bank = 0 if big_bank == . & lender_is_nonbank == 0
 
 la var big_bank "Big Bank"
-la var big_pc "Big Direct Lender"
+la var big_nonbank "Big Nonbank"
+gen big_nonbank_inter = big_nonbank * lender_is_nonbank
+replace big_nonbank_inter = 0 if big_nonbank_inter == .
+la var big_nonbank_inter "Lender is Nonbank * Big"
+
+*** Nov 12 Update: Regression with bank and nonbank + nonbank*big_nonbank
+	foreach var of varlist `info_vars' {
+		eststo: reghdfe `var' lender_is_nonbank big_nonbank_inter `borr_vars' `deal_vars', absorb(year ff_12)
+	}
+	esttab using "$tabdir/Table7.tex", replace ///
+	nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+	star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+	* clear storeed est
+	eststo clear
 
 preserve 
-	keep if lender_is_private_credit == 0
+	keep if lender_is_nonbank == 0
 	tab lead_arranger lender_meeting
 	tab lead_arranger big_bank
 	* regression	
@@ -567,27 +600,6 @@ preserve
 		eststo: reghdfe `var' big_bank `borr_vars' `deal_vars', absorb(year ff_12)
 	}
 	esttab using "$tabdir/Table7_bank.tex", replace ///
-	nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
-	star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
-	* clear storeed est
-	eststo clear
-restore
-
-preserve
-	keep if lender_is_private_credit == 1
-	* manually clean some names 
-	replace big_pc = 1 if strpos(lead_arranger, "apollo") > 0
-	replace big_pc = 1 if strpos(lead_arranger, "ares") > 0
-	replace big_pc = 1 if strpos(lead_arranger, "cortland") > 0
-	replace big_pc = 1 if strpos(lead_arranger, "kkr") > 0
-	replace big_pc = 1 if strpos(lead_arranger, "oaktree") > 0
-	replace big_pc = 1 if strpos(lead_arranger, "blue torch") > 0
-	replace big_pc = 1 if strpos(lead_arranger, "tcw") > 0
-
-	foreach var of varlist `info_vars' {
-		eststo: reghdfe `var' big_pc `borr_vars' `deal_vars', absorb(year ff_12)
-	}
-	esttab using "$tabdir/Table7_pc.tex", replace ///
 	nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
 	star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
 	* clear storeed est
@@ -608,7 +620,6 @@ use "$cleandir/final_regression_sample.dta", clear
 		replace industry`i'_12 = 10 if industry_`i' == "Healthcare"
 		replace industry`i'_12 = 3 if industry_`i' == "Industrials"
 		replace industry`i'_12 = 4 if industry_`i' == "Raw Materials & Natural Resources"
-		drop if industry`i'_12 == .
 	}
 	order industry* ff_12
 	
@@ -622,13 +633,14 @@ use "$cleandir/final_regression_sample.dta", clear
 	la var same_industry "Same Industry"
 	la var inter "Lender is Nonbank X Same Industry"
 	
-	eststo: reghdfe monthly_fs same_industry lender_is_nonbank inter `borr_vars' `deal_vars', absorb(year)
-	eststo: reghdfe projected_fs same_industry lender_is_nonbank inter `borr_vars' `deal_vars', absorb(year)
-	eststo: reghdfe lender_meeting same_industry lender_is_nonbank inter `borr_vars' `deal_vars', absorb(year)
+	foreach var of varlist `info_vars' {
+		eststo: reghdfe `var' lender_is_nonbank inter `borr_vars' `deal_vars', absorb(year ff_12)
+	}
 	esttab using "$tabdir/Table8_industry.tex", replace ///
 	nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
 	star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
 	* clear storeed est
 	eststo clear
 
-*** big vs small	
+********************************************************************************
+log close 
