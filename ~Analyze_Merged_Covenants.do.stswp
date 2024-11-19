@@ -198,7 +198,7 @@ twoway (tsline deal_amount11, lcolor(blue) lpattern(solid)) ///
        (tsline deal_amount13, lcolor(green) lpattern(longdash)) ///
        , ///
        title("Number of Deals by Lender Types Over Time") ///
-       legend(order(1 "Bank" 2 "Private Credit" 3 "Other Nonbank Lender")) ///
+       legend(order(1 "Bank" 2 "Private Credit" 3 "Other Nonbank Lender") position(1) ring(0)) ///
        ytitle("Deal Count") xtitle("Year") ///
        xlabel(2010(2)2023) ///
        graphregion(color(white)) plotregion(color(white)) 
@@ -210,7 +210,7 @@ twoway (tsline share2, lcolor(red) lpattern(dash)) ///
        (tsline share3, lcolor(green) lpattern(longdash)) ///
        , ///
        title("Share of Deals by Lender Types Over Time") ///
-       legend(order(1 "Private Credit" 2 "Other Nonbank Lender")) ///
+       legend(order(1 "Private Credit" 2 "Other Nonbank Lender") position(1) ring(0)) ///
        ytitle("Deal Count") xtitle("Year") ///
        xlabel(2010(2)2023) ///
        graphregion(color(white)) plotregion(color(white)) 
@@ -224,7 +224,7 @@ twoway (tsline monthly_fs1, lcolor(blue) lpattern(solid)) ///
        (tsline monthly_fs3, lcolor(green) lpattern(longdash)) ///
        , ///
        title("Use of Monthly Financial Statement Covenant by Lender Types") ///
-       legend(order(1 "Bank" 2 "Private Credit" 3 "Other Nonbank Lender")) ///
+       legend(order(1 "Bank" 2 "Private Credit" 3 "Other Nonbank Lender") position(1) ring(0)) ///
        ytitle("Frequency") xtitle("Year") ///
        xlabel(2010(2)2023) ///
        graphregion(color(white)) plotregion(color(white))
@@ -237,7 +237,7 @@ twoway (tsline projected_fs1, lcolor(blue) lpattern(solid)) ///
        (tsline projected_fs3, lcolor(green) lpattern(longdash)) ///
        , ///
        title("Use of Annual Budget/Project Covenant by Lender Types") ///
-       legend(order(1 "Bank" 2 "Private Credit" 3 "Other Nonbank Lender")) ///
+       legend(order(1 "Bank" 2 "Private Credit" 3 "Other Nonbank Lender") position(1) ring(0)) ///
        ytitle("Frequency") xtitle("Year") ///
        xlabel(2010(2)2023) ///
        graphregion(color(white)) plotregion(color(white))
@@ -451,8 +451,12 @@ rddensity debt_to_ebitda, c(6) plot
 rdrobust lender_is_nonbank debt_to_ebitda, c(6)
 
 	use "$cleandir/final_regression_sample.dta", clear
+	
+	drop if asset_based == 1
+	drop if prev_ebitda > 50
+	
 * check for share of nonbank loans for over prev_ebitda
-egen prev_ebitda_bins = cut(prev_ebitda), at(-50 -20 -10 -5 -1 5 10 20 50 100 200)
+egen prev_ebitda_bins = cut(prev_ebitda), at(-50 -20 -10 -5 -1 5 10 20 50)
 preserve
 	collapse (mean) lender_is_nonbank (count) gvkey, by(prev_ebitda_bins)
 	scatter lender_is_nonbank prev_ebitda_bins
