@@ -189,9 +189,9 @@ non_regulated_ib_fcs <- c("brown brothers harriman & co.", "calyon", "cantor fit
                           "td securities", "the cit group/business credit", "wachovia", "wilmington", "ge capital", "ing capital",
                           "walker & dunlop", "truist")
 banks <- c("barclays", "bayerische", "bbva", "bear", "bmo", "bnp paribas", "bofa", "capital one", "cibc", "citicorp", "citigroup",
-"citizens", "credit lyonnais", "credit suisse", "goldman", "hsbc", "j.p. morgan", "j. p. morgan", "jpmorgan", "jp morgan", "lehman brothers", 
-"merrill", "morgan stanley", "pnc", "rbc", "rbs", "societe generale", "suntrust", "toronto dominion", "ubs", "wells fargo", 
-"société générale", "harris", "westlb")
+           "citizens", "credit lyonnais", "credit suisse", "goldman", "hsbc", "j.p. morgan", "j. p. morgan", "jpmorgan", "jp morgan", "lehman brothers", 
+           "merrill", "morgan stanley", "pnc", "rbc", "rbs", "societe generale", "suntrust", "toronto dominion", "ubs", "wells fargo", 
+           "société générale", "harris", "westlb")
 # generate a variable that indicates whether the lender is a bank if "bank" appears in the name or strings in banks above appear in the name
 # Collapse the bank names into a single pattern
 bank_pattern <- str_c(banks, collapse = "|")
@@ -208,6 +208,12 @@ agreements <- agreements %>%
 # generate a variable indicating whether the lender is a private credit entity
 agreements <- agreements %>%
   mutate(lender_is_private_credit_entity = ifelse(str_detect(lead_arranger, regex(private_credit_entities_pattern, ignore_case = TRUE)), 1, 0))
+
+# check the number of observations for each lender type
+agreements %>%
+  group_by(lender_is_nonbank) %>%
+  summarise(n = n())
+
 
 ###############################################################################################
 # NEW FROM OCT 23RD (Use Pitchbook lender_name fuzzy matched to lead_arranger to identify private credit entities))
@@ -425,7 +431,7 @@ ggsave(file.path(figure_path, "Info_Cov_94to23_private_credit_mm.pdf"))
 compa <- fread("../Data/Raw/compustat_annual.csv") 
 # select only gvkey, fyear, at, and ebitda
 compa <- compa %>%
-  select(gvkey, fyear, at, ebitda, sic)
+  select(gvkey, fyear, at, ebitda, ebitda_generated, sic)
 # fill in sic with sic from other years if it's NA
 compa <- compa %>%
   group_by(gvkey) %>%
@@ -443,7 +449,7 @@ compa <- compa %>%
 
 # merge with agreements_mm
 agreements_mm <- agreements_mm %>%
-  left_join(compa %>% select(gvkey, fyear, prev_at, prev_ebitda, sic), by = c("gvkey" = "gvkey", "year" = "fyear"))
+  left_join(compa %>% select(gvkey, fyear, prev_at, prev_ebitda, ebitda_generated, sic), by = c("gvkey" = "gvkey", "year" = "fyear"))
 
 # check for missing prev_ebitda observations in a separate dataset
 missing_ppe <- agreements_mm %>%

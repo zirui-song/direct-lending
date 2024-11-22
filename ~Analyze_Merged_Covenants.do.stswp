@@ -12,7 +12,7 @@ global tabdir "/Users/zrsong/Dropbox (MIT)/Apps/Overleaf/Information Covenants o
 global figdir "/Users/zrsong/Dropbox (MIT)/Apps/Overleaf/Information Covenants of Direct Lending/Figures"
 global logdir "$repodir/Code/LogFiles"
 
-log using "$logdir/Analyze_Merged_Covenants.log", text replace
+*log using "$logdir/Analyze_Merged_Covenants.log", text replace
 
 /**************
 	Data Cleaning
@@ -53,6 +53,30 @@ egen all_info = rowmin(monthly_fs projected_fs lender_meeting)
 
 gen lender_is_other_nonbank = 1 if lender_is_nonbank == 1 & lender_is_private_credit != 1
 replace lender_is_other_nonbank = 0 if lender_is_nonbank == 0
+
+gen scaled_ebitda = prev_ebitda/atq
+la var scaled_ebitda "EBITDA (Scaled)"
+
+gen ln_atq = log(atq)
+la var ln_atq "Ln(Total Assets)"
+	
+gen prev_ebitda_dummy = 1 if prev_ebitda < 0 
+replace prev_ebitda_dummy = 0 if prev_ebitda_dummy == .
+la var prev_ebitda_dummy "EBITDA < 0"
+
+gen debt_to_ebitda = ltq/prev_ebitda
+replace debt_to_ebitda = 0 if debt_to_ebitda < 0 /// according to Chernenko et al 2022
+
+* winsorize at 5 and 95% according to chernenko et al
+winsor2 debt_to_ebitda, cuts(5 95) replace
+
+gen debt_to_ebitda_gr6 = 1 if debt_to_ebitda > 6
+replace debt_to_ebitda_gr6 = 1 if debt_to_ebitda == 0
+replace debt_to_ebitda_gr6 = 0 if debt_to_ebitda_gr6 == .
+
+export delimited "$intdir/full_sample_without_int.csv", replace
+save "$intdir/full_sample_without_int.dta", replace
+
 
 drop if deal_amount1 == .
 
@@ -250,7 +274,7 @@ twoway (tsline lender_meeting1, lcolor(blue) lpattern(solid)) ///
        (tsline lender_meeting3, lcolor(green) lpattern(longdash)) ///
        , ///
        title("Use of Lender Meeting Covenant by Lender Types") ///
-       legend(order(1 "Bank" 2 "Private Credit" 3 "Other Nonbank Lender")) ///
+       legend(order(1 "Bank" 2 "Private Credit" 3 "Other Nonbank Lender") position(1) ring(0)) ///
        ytitle("Frequency") xtitle("Year") ///
        xlabel(2010(2)2023) ///
        graphregion(color(white)) plotregion(color(white))
@@ -289,28 +313,8 @@ la var asset_based "Asset Based Loan"
 gen ln_deal_amount = ln(deal_amount1)
 la var ln_deal_amount "Ln(Deal Amount)"
 
-gen scaled_ebitda = prev_ebitda/atq
-la var scaled_ebitda "EBITDA (Scaled)"
-
-gen ln_atq = log(atq)
-la var ln_atq "Ln(Total Assets)"
-	
-gen prev_ebitda_dummy = 1 if prev_ebitda < 0 
-replace prev_ebitda_dummy = 0 if prev_ebitda_dummy == .
-la var prev_ebitda_dummy "EBITDA < 0"
-
-gen debt_to_ebitda = ltq/prev_ebitda
-replace debt_to_ebitda = 0 if debt_to_ebitda < 0 /// according to Chernenko et al 2022
-
-* winsorize at 5 and 95% according to chernenko et al
-winsor2 debt_to_ebitda, cuts(5 95) replace
-
-gen debt_to_ebitda_gr6 = 1 if debt_to_ebitda > 6
-replace debt_to_ebitda_gr6 = 1 if debt_to_ebitda == 0
-replace debt_to_ebitda_gr6 = 0 if debt_to_ebitda_gr6 == .
-
 save "$cleandir/final_regression_sample.dta", replace
-
+export delimited "$cleandir/final_regression_sample.csv", replace
 
 *** Determinant Regressions (Table III)
 
@@ -431,29 +435,30 @@ eststo clear
 pstest `borr_vars' `deal_vars', graph both graphregion(color(white)) bgcolor(white)
 graph export "$figdir/Figure5_psm_other.pdf", replace
 
-
 /**************
 	Regression Discontinuity Design Around prev_ebitda == 0
 	***************/
 	use "$cleandir/final_regression_sample.dta", clear
+	use "$intdir/full_sample_without_int.dta", clear
+
 	
-drop if asset_based == 1
-drop if debt_to_ebitda <= 4
+*drop if asset_based == 1
+*drop if debt_to_ebitda_gr6 == 1
+
 * check for binds around debt_to_ebitda_gr6
-egen debt_to_ebitda_bins = cut(debt_to_ebitda), at(2 4 6 8 10 15 20 25 30 35 40)
+egen debt_to_ebitda_bins = cut(debt_to_ebitda), at(4 6 8 10 15 20 25 30 35 40)
 preserve
 	collapse (mean) lender_is_nonbank (count) gvkey, by(debt_to_ebitda_bins)
 	scatter lender_is_nonbank debt_to_ebitda_bins
 	*scatter gvkey debt_to_ebitda_bins
 restore
 
-rddensity debt_to_ebitda, c(6) plot
-rdrobust lender_is_nonbank debt_to_ebitda, c(6)
+rddensity debt_to_ebitda, c(4) plot
+rdrobust margin_bps debt_to_ebitda, c(4) fuzzy(lender_is_nonbank)
 
 	use "$cleandir/final_regression_sample.dta", clear
-	
-	drop if asset_based == 1
-	drop if prev_ebitda > 50
+	use "$intdir/full_sample_without_int.dta", clear
+	drop if debt_to_ebitda <= 4 & debt_to_ebitda > 0
 	
 * check for share of nonbank loans for over prev_ebitda
 egen prev_ebitda_bins = cut(prev_ebitda), at(-50 -20 -10 -5 -1 5 10 20 50)
@@ -468,7 +473,7 @@ histogram prev_ebitda, bin(50) normal kdensity freq
 rddensity prev_ebitda, c(0) plot
 
 rdrobust lender_is_nonbank prev_ebitda, c(0)
-rdrobust monthly_fs prev_ebitda, c(0) fuzzy(lender_is_nonbank)
+rdrobust monthly_fs prev_ebitda, c(0) fuzzy(lender_is)
 
 /**************
 	DiD
@@ -483,13 +488,18 @@ drop if asset_based == 1
 gen post = 1 if year > 2013
 replace post = 0 if post == .
 
-gen treat_post = debt_to_ebitda_gr6 * post
+*keep if debt_to_ebitda > 4 | debt_to_ebitda == 0
+gen treat = 1 if debt_to_ebitda > 4 | debt_to_ebitda == 0
+replace treat = 0 if treat == .
+
+gen treat_post = treat * post
 
 *TWFE
-reghdfe lender_is_private_credit debt_to_ebitda_gr6 post treat_post deal_amount1 maturity_year interest_spread1 ln_atq leverage, absorb(year ff_12)
+reghdfe lender_is_nonbank post deal_amount1 maturity_year interest_spread1 ln_atq leverage, absorb(ff_12)
 */
-reghdfe monthly_fs debt_to_ebitda_gr6 post treat_post deal_amount1 maturity_year interest_spread1 ln_atq leverage, absorb(gvkey ff_12)
+reghdfe monthly_fs post deal_amount1 maturity_year interest_spread1 ln_atq leverage, absorb(ff_12)
 
+ivregress 2sls monthly_fs deal_amount1 maturity_year interest_spread1 ln_atq leverage i.ff_12 (lender_is_nonbank = post)
 *** in 2013 SNC guideline says that firms with <0 ebitda is substandard -> after 2013 firms
 *	with < 0 ebitda is less likely to borrow from banks and more likely to borrow from PCs
 * 	Treat: < EBITDA, Post: 2014 onward
@@ -645,6 +655,7 @@ use "$cleandir/final_regression_sample.dta", clear
 	star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
 	* clear storeed est
 	eststo clear
+	
 
 ********************************************************************************
 log close 
