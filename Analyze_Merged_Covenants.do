@@ -20,7 +20,7 @@ global logdir "$repodir/Code/LogFiles"
 
 import delimited "$cleandir/agreements_mm_dealinfo.csv", clear
 keep if year >= 2010
-destring atq-prev_ebitda sic deal_amount1 interest_spread1 lender_is_private_credit, replace ignore("NA")
+destring atq-prev_ebitda sic deal_amount1 interest_spread1 lender_is_private_credit debt, replace ignore("NA")
 drop if atq >= .
 * generate maturity
 replace maturity1 = "" if maturity1 == "NA"
@@ -64,14 +64,14 @@ gen prev_ebitda_dummy = 1 if prev_ebitda < 0
 replace prev_ebitda_dummy = 0 if prev_ebitda_dummy == .
 la var prev_ebitda_dummy "EBITDA < 0"
 
-gen debt_to_ebitda = ltq/prev_ebitda
-replace debt_to_ebitda = 0 if debt_to_ebitda < 0 /// according to Chernenko et al 2022
+gen debt_to_ebitda = debt/prev_ebitda
+*replace debt_to_ebitda = 0 if debt_to_ebitda < 0 /// according to Chernenko et al 2022
 
 * winsorize at 5 and 95% according to chernenko et al
 winsor2 debt_to_ebitda, cuts(5 95) replace
 
 gen debt_to_ebitda_gr6 = 1 if debt_to_ebitda > 6
-replace debt_to_ebitda_gr6 = 1 if debt_to_ebitda == 0
+replace debt_to_ebitda_gr6 = 1 if debt_to_ebitda < 0
 replace debt_to_ebitda_gr6 = 0 if debt_to_ebitda_gr6 == .
 
 export delimited "$intdir/full_sample_without_int.csv", replace
@@ -398,6 +398,17 @@ star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
 * clear storeed est
 eststo clear
 
+*** Main regression with firm fixed effects
+foreach var of varlist `info_vars' {
+	eststo: reghdfe `var' lender_is_nonbank `borr_vars' `deal_vars', absorb(gvkey year)
+}
+esttab using "$tabdir/Table4_main_regression_gvkey_all.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+* clear storeed est
+eststo clear
+
+
 *** Propensity Score Matching
 
 	use "$cleandir/final_regression_sample.dta", clear
@@ -439,26 +450,23 @@ graph export "$figdir/Figure5_psm_other.pdf", replace
 	Regression Discontinuity Design Around prev_ebitda == 0
 	***************/
 	use "$cleandir/final_regression_sample.dta", clear
-	use "$intdir/full_sample_without_int.dta", clear
-
 	
-*drop if asset_based == 1
-*drop if debt_to_ebitda_gr6 == 1
+drop if asset_based == 1
+drop if prev_ebitda < 0
 
 * check for binds around debt_to_ebitda_gr6
-egen debt_to_ebitda_bins = cut(debt_to_ebitda), at(4 6 8 10 15 20 25 30 35 40)
+egen debt_to_ebitda_bins = cut(debt_to_ebitda), at(6 8 10 12 14)
 preserve
 	collapse (mean) lender_is_nonbank (count) gvkey, by(debt_to_ebitda_bins)
 	scatter lender_is_nonbank debt_to_ebitda_bins
 	*scatter gvkey debt_to_ebitda_bins
 restore
 
-rddensity debt_to_ebitda, c(4) plot
-rdrobust margin_bps debt_to_ebitda, c(4) fuzzy(lender_is_nonbank)
+rddensity debt_to_ebitda, c(6) plot
+rdrobust lender_is_nonbank debt_to_ebitda, c(6)
+rdrobust monthly_fs debt_to_ebitda, c(6) fuzzy(lender_is_nonbank)
 
 	use "$cleandir/final_regression_sample.dta", clear
-	use "$intdir/full_sample_without_int.dta", clear
-	drop if debt_to_ebitda <= 4 & debt_to_ebitda > 0
 	
 * check for share of nonbank loans for over prev_ebitda
 egen prev_ebitda_bins = cut(prev_ebitda), at(-50 -20 -10 -5 -1 5 10 20 50)
@@ -482,24 +490,17 @@ rdrobust monthly_fs prev_ebitda, c(0) fuzzy(lender_is_private_credit)
 *** in 2018 from SNC increase from $20 to $100 million	
 use "$cleandir/final_regression_sample.dta", clear
 drop if asset_based == 1
-
 *** generate treat and post variables 
 
 gen post = 1 if year > 2013
 replace post = 0 if post == .
 
-*keep if debt_to_ebitda > 4 | debt_to_ebitda == 0
-gen treat = 1 if debt_to_ebitda > 4 | debt_to_ebitda == 0
-replace treat = 0 if treat == .
-
-gen treat_post = treat * post
+gen treat_post = debt_to_ebitda_gr6 * post
 
 *TWFE
-reghdfe lender_is_nonbank post deal_amount1 maturity_year interest_spread1 ln_atq leverage, absorb(ff_12)
+reghdfe lender_is_nonbank debt_to_ebitda_gr6 treat_post deal_amount1 maturity_year interest_spread1 ln_atq leverage, absorb(year gvkey)
 */
-reghdfe monthly_fs post deal_amount1 maturity_year interest_spread1 ln_atq leverage, absorb(ff_12)
-
-ivregress 2sls monthly_fs deal_amount1 maturity_year interest_spread1 ln_atq leverage i.ff_12 (lender_is_nonbank = post)
+reghdfe projected_fs debt_to_ebitda_gr6 treat_post deal_amount1 maturity_year interest_spread1 ln_atq leverage, absorb(year gvkey)
 *** in 2013 SNC guideline says that firms with <0 ebitda is substandard -> after 2013 firms
 *	with < 0 ebitda is less likely to borrow from banks and more likely to borrow from PCs
 * 	Treat: < EBITDA, Post: 2014 onward
@@ -524,7 +525,7 @@ la var treat_post "Treat*Post"
 local borr_vars "scaled_ebitda ln_atq roa leverage"
 local deal_vars "ln_deal_amount maturity_year interest_spread1"	
 local info_vars "monthly_fs projected_fs lender_meeting hard_info info_n all_info"
-eststo: reghdfe lender_is_private_credit treat_post `deal_vars', absorb(year gvkey)
+eststo: reghdfe lender_is_nonbank treat_post `deal_vars', absorb(year gvkey)
 foreach var of varlist `info_vars' {
 	eststo: reghdfe `var' treat_post `deal_vars', absorb(year gvkey)
 }
@@ -658,4 +659,4 @@ use "$cleandir/final_regression_sample.dta", clear
 	
 
 ********************************************************************************
-log close 
+*log close 

@@ -431,7 +431,7 @@ ggsave(file.path(figure_path, "Info_Cov_94to23_private_credit_mm.pdf"))
 compa <- fread("../Data/Raw/compustat_annual.csv") 
 # select only gvkey, fyear, at, and ebitda
 compa <- compa %>%
-  select(gvkey, fyear, at, ebitda, ebitda_generated, sic)
+  select(gvkey, fyear, at, ebitda, debt, sic)
 # fill in sic with sic from other years if it's NA
 compa <- compa %>%
   group_by(gvkey) %>%
@@ -449,7 +449,7 @@ compa <- compa %>%
 
 # merge with agreements_mm
 agreements_mm <- agreements_mm %>%
-  left_join(compa %>% select(gvkey, fyear, prev_at, prev_ebitda, ebitda_generated, sic), by = c("gvkey" = "gvkey", "year" = "fyear"))
+  left_join(compa %>% select(gvkey, fyear, prev_at, prev_ebitda, debt, sic), by = c("gvkey" = "gvkey", "year" = "fyear"))
 
 # check for missing prev_ebitda observations in a separate dataset
 missing_ppe <- agreements_mm %>%
