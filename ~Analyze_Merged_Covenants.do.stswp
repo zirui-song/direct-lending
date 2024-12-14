@@ -686,7 +686,7 @@ replace topthree_industry = 1 if topthree_industry == 0 & same_industry == 1
 
 gen inter = lender_is_nonbank * topthree_industry
 
-la var topthree_industry "Top 3 Industry"
+la var same_industry "Top 3 Industry"
 la var inter "Lender is Nonbank X Top 3 Industry"
 
 foreach var of varlist `info_vars' {
