@@ -17,7 +17,7 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 rm(list = ls())
 
 # Define the base figure path
-figure_path <- "/Users/zrsong/Dropbox (MIT)/Apps/Overleaf/Information Covenants of Direct Lending/Figures"
+figure_path <- "/Users/zrsong/MIT Dropbox/Zirui Song/Apps/Overleaf/Information Covenants of Nonbank Direct Lending/Figures"
 
 ##################################################
   # Section 0: Clean combined_loancontracts and df_merged_crsp
@@ -317,7 +317,7 @@ ggsave(file.path(figure_path, "Agreements_by_year_private_credit.pdf"))
 
 ##################################################
 # time series plots of the three variables (monthly_fs, projected_fs, lender_meeting) by year for banks and nonbanks on the same plot
-library(zoo)
+
 plot_infocov_ts <- function(data, lender_var) {
   lender_var_name <- deparse(substitute(lender_var))  # Get the name of lender_var as a string
   data %>%
@@ -360,6 +360,52 @@ plot_infocov_ts <- function(data, lender_var) {
       linetype = guide_legend(title = lender_var_name)
     )
 }
+
+plot_infocov_ts2 <- function(data, lender_var) {
+  lender_var_name <- deparse(substitute(lender_var))  # Get the name of lender_var as a string
+  data %>%
+    group_by(year, {{ lender_var }}) %>%
+    summarise(
+      monthly_fs = mean(monthly_fs, na.rm = TRUE),
+      projected_fs = mean(projected_fs, na.rm = TRUE),
+      lender_meeting = mean(lender_meeting, na.rm = TRUE)
+    ) %>%
+    # Reshape the data from wide to long format for easier plotting
+    gather(key = "variable", value = "value", -year, -{{ lender_var }}) %>%
+    ggplot(aes(x = year, y = value, color = variable, linetype = factor({{ lender_var }}))) +
+    geom_line() +
+    theme_minimal() +
+    labs(title = "Time Series of Monthly FS, Projected FS, and Lender Meeting Covenants",
+         x = "Year",
+         y = "Proportion of Agreements with Information Covenant",
+         color = "Variable",
+         linetype = "Lender is Bank") +
+    # Manually set linetypes: solid for 1, dashed for 0
+    scale_linetype_manual(values = c("1" = "solid", "0" = "dashed")) + 
+    theme(
+      legend.position = c(0.2, 0.8),  # Position legend inside the plot
+      legend.background = element_blank(),  # Remove legend background fill
+      legend.box.background = element_blank(),  # Remove legend border color
+      legend.text = element_text(size = 8),  # Smaller text inside the legend
+      legend.title = element_text(size = 8),  # Smaller title inside the legend
+      legend.key.size = unit(0.5, "cm"),  # Smaller keys in the legend
+      legend.spacing.y = unit(0.2, "cm"),  # Smaller vertical spacing
+      legend.spacing.x = unit(0.2, "cm"),  # Smaller horizontal spacing
+      axis.text.x = element_text(angle = 45, hjust = 1)  # Rotate x-axis labels
+    ) +
+    guides(
+      color = guide_legend(title = "Variable"), 
+      linetype = guide_legend(title = lender_var_name)
+    )
+}
+plot_infocov_ts2(agreements, lender_is_nonbank)
+ggsave(file.path(figure_path, "Info_Cov2_94to23_full.pdf"))
+
+# tab number of obs per year for each year (# ℹ Use `print(n = ...)` to see more rows)
+obs <- agreements %>%
+  group_by(year) %>%
+  summarise(n = n())
+
 plot_infocov_ts(agreements, lender_is_nonbank)
 ggsave(file.path(figure_path, "Info_Cov_94to23_full.pdf"))
 plot_infocov_ts(agreements, lender_is_private_credit_entity)
@@ -495,6 +541,9 @@ ggsave(file.path(figure_path, "Info_Cov_94to23_mm_dealinfo.pdf"))
 plot_infocov_ts(agreements_mm_dealinfo, lender_is_private_credit_entity)
 ggsave(file.path(figure_path, "Info_Cov_94to23_private_credit_mm_dealinfo.pdf"))
 
+plot_infocov_ts2(agreements_mm_dealinfo, lender_is_nonbank)
+ggsave(file.path(figure_path, "Info_Cov2_94to23_mm_dealinfo.pdf"))
+
 plot_agreements_ts(agreements_mm_dealinfo, lender_is_nonbank)
 ggsave(file.path(figure_path, "Agreements_by_year_bank_mm_dealinfo.pdf"))
 plot_agreements_ts(agreements_mm_dealinfo, lender_is_private_credit_entity)
@@ -572,13 +621,17 @@ write.csv(agreements_mm_dealinfo_libor, "../Data/Cleaned/agreements_mm_dealinfo.
 #          digits = 2, title = "Summary", out = "../Results/Table1_PanelB.txt")
 
 ### Merge with Dealscan 
-#dealscan_compq_matched <- read_dta("../Data/Cleaned/dealscan_compustat_matched.dta")
+dealscan_compq_matched <- read_dta("../Data/Cleaned/dealscan_compustat_matched.dta")
 # keep only needed variables
-#dealscan_compq_matched <- dealscan_compq_matched %>%
-#  select(gvkey, year, quarter, lead_arranger, deal_amount, deal_amount_converted, 
-#         deal_purpose, tranche_active_date, tranche_maturity_date, seniority_type, 
-#         secured, covenants, base_reference_rate, margin_bps, all_base_rate_spread_margin,
-#         base_rate_margin_bps, floor_bps)
+dealscan_compq_matched <- dealscan_compq_matched %>%
+  select(gvkey, year, quarter, lead_arranger, deal_amount, deal_amount_converted, 
+         deal_purpose, tranche_active_date, tranche_maturity_date, seniority_type, 
+         secured, covenants, base_reference_rate, margin_bps, all_base_rate_spread_margin,
+         base_rate_margin_bps, floor_bps)
+
+# merge agreements with dealscan_compq_matched
+agreements_ds_matched <- agreements %>%
+  inner_join(dealscan_compq_matched, by = c("gvkey" = "gvkey", "year" = "year"), relationship = 'many-to-many')
 
 ### Merge with Pitchbook (Nonbanks) ###
 #pitchbook <- fread("../Data/Cleaned/PitchBook_Cleaned.csv")
