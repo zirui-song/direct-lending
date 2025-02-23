@@ -98,7 +98,7 @@ drop if maturity_year == .
 * this is because text files given by Chuck cuts out the tables (performance pricing)
 keep if interest_spread1 == .
 keep accession type_filing type_attachment
-export delimited "$intdir/missing_interest_spreads.csv", replace
+export delimited "$intdir/missing_interest_spreads.csv", c
 *drop if interest_spread1 == .
 
 *** drop obs with missing ebitda
