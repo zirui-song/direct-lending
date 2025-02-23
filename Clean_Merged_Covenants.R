@@ -415,51 +415,14 @@ ggsave(file.path(figure_path, "Info_Cov_94to23_private_credit.pdf"))
 # Section 3: Merge with Compustat Quarterly (Annual) Data
 ##################################################
 
-# import compustat quarterly data
-compq <- fread("../Data/Raw/compustat_quarterly.csv")
-# check for years in compq
-compq %>%
-  summarise(min_year = min(fyearq), max_year = max(fyearq))
-# replace xrdq = 0 if missing
-compq <- compq %>%
-  mutate(xrdq = ifelse(is.na(xrdq), 0, xrdq))
-# fill missing value of ppegtq with previous of next value of year quarter
-compq <- compq %>%
-  group_by(gvkey) %>%
-  arrange(gvkey, fyearq, fqtr) %>%
-  fill(ppegtq, .direction = "downup")
-# fill still-missing values with ppentq (net ppe)
-compq <- compq %>%
-  mutate(ppegtq = ifelse(is.na(ppegtq), ppentq, ppegtq))
-compq <- compq %>%
-  group_by(gvkey) %>%
-  arrange(gvkey, fyearq, fqtr) %>%
-  fill(ppegtq, .direction = "downup")
-
+compq = fread("../Data/Cleaned/crsp_compustat_quarterly_cleaned.csv")
 # merge with filing data
 agreements_compq_merged <- agreements %>%
-  left_join(compq %>% select(gvkey, fyearq, fqtr, atq, revtq, niq, ibq, ltq, xrdq, xrdy, ppegtq, ppentq, mkvaltq, prccq, cshoq, be), 
-            by = c("gvkey" = "gvkey", "year" = "fyearq", "quarter" = "fqtr"))
-# calculate ROA
-agreements_compq_merged <- agreements_compq_merged %>%
-  mutate(roa = ibq / atq)
-# calculate leverage
-agreements_compq_merged <- agreements_compq_merged %>%
-  mutate(leverage = ltq / atq)
-# replace xrd ppegt to be divided by at
-agreements_compq_merged <- agreements_compq_merged %>%
-  mutate(xrdq = xrdq / atq,
-         ppegtq = ppegtq / atq)
-# replace mkvaltq with prccq * cshoq if mkvaltq is NA
-agreements_compq_merged <- agreements_compq_merged %>%
-  mutate(mkvaltq = ifelse(is.na(mkvaltq), prccq * cshoq, mkvaltq))
-# calculate market-to-book
-agreements_compq_merged <- agreements_compq_merged %>%
-  mutate(market_to_book = mkvaltq / be)
+  left_join(compq, by = c("gvkey" = "gvkey", "year" = "fyearq", "quarter" = "fqtr"))
 
 # keep only those firms with revenue between 10,000,000 and 1,000,000,000
 agreements_mm <- agreements_compq_merged %>%
-  filter(revtq >= 10 & revtq <= 1000)
+  filter(revenue >= 10 & revenue <= 1000)
 
 # time series plots of the number of credit agreements by year by lender_is_nonbank
 plot_agreements_ts(agreements_mm, lender_is_nonbank)
@@ -473,36 +436,12 @@ ggsave(file.path(figure_path, "Info_Cov_94to23_mm.pdf"))
 plot_infocov_ts(agreements_mm, lender_is_private_credit_entity)
 ggsave(file.path(figure_path, "Info_Cov_94to23_private_credit_mm.pdf"))
 
-# merge with annual compustat to get ebitda in the previous year
-compa <- fread("../Data/Raw/compustat_annual.csv") 
-# select only gvkey, fyear, at, and ebitda
-compa <- compa %>%
-  select(gvkey, fyear, at, ebitda, debt, sic)
-# fill in sic with sic from other years if it's NA
-compa <- compa %>%
-  group_by(gvkey) %>%
-  fill(sic, .direction = "downup")
-# generate prev year atq and ebitda and sic within each gvkey group
-compa <- compa %>%
-  group_by(gvkey) %>%
-  arrange(gvkey, fyear) %>%
-  mutate(prev_at = lag(at),
-         prev_ebitda = lag(ebitda))
-# change prev_ebitda and prev_at to ebitda and at if missing
-compa <- compa %>%
-  mutate(prev_at = ifelse(is.na(prev_at), at, prev_at),
-         prev_ebitda = ifelse(is.na(prev_ebitda), ebitda, prev_ebitda))
-
-# merge with agreements_mm
-agreements_mm <- agreements_mm %>%
-  left_join(compa %>% select(gvkey, fyear, prev_at, prev_ebitda, debt, sic), by = c("gvkey" = "gvkey", "year" = "fyear"))
-
-# check for missing prev_ebitda observations in a separate dataset
-missing_ppe <- agreements_mm %>%
-  filter(is.na(ppegtq))
-
 # save as csv
 write.csv(agreements_mm, "../Data/Cleaned/agreements_mm.csv", row.names = FALSE)
+
+##################################################
+# Section 4: Merge back to LoanContracts with Deal Information
+##################################################
 
 ### merge agreements_mm with deal information to arrive at the final dataset that includes only new contracts with deal information
 new_loancontracts_mm_dealinfo <- fread("../Data/LoansFull/loancontracts_with_extracted_dealinfo_oct26_update.csv")
@@ -550,7 +489,7 @@ plot_agreements_ts(agreements_mm_dealinfo, lender_is_private_credit_entity)
 ggsave(file.path(figure_path, "Agreements_by_year_private_credit_mm_dealinfo.pdf"))
 
 ##################################################
-# Section 2.1: Clean LIBOR Rate Datasets
+# Section 5: Clean LIBOR Rate Datasets
 ##################################################
 libor1 <- fread("../Data/Raw/LIOR3M.csv")
 colnames(libor1) <- c("date", "rate")
@@ -593,109 +532,3 @@ write.csv(libor, "../Data/Cleaned/libor3_rates.csv", row.names = FALSE)
 agreements_mm_dealinfo_libor <- agreements_mm_dealinfo %>%
   left_join(libor, by = c("year" = "year", "quarter" = "quarter"))
 write.csv(agreements_mm_dealinfo_libor, "../Data/Cleaned/agreements_mm_dealinfo.csv", row.names = FALSE)
-
-
-##################################################
-# Section 3: Table 1/2 (Summary Statistics) and Main Regression
-##################################################
-
-### Table 1: Summary Statistics of full sample of 3446 loan contracts from 2010 to 2024 by lender_is_nonbank
-# summary table of filing_data_filtered
-# make sure filing_data_filtered is a df
-# filing_data_filtered <- as.data.frame(filing_data_filtered)
-# variable_labels <- c("monthly_fs" = "Monthly FS",
-#                      "projected_fs" = "Projected FS",
-#                      "lender_meeting" = "Lender Meeting")
-# variable_labels_firm <- c("Size", "ROA", "Leverage", "Revenue")
-# 
-# stargazer(filing_data_filtered[, c("monthly_fs","projected_fs","lender_meeting")], 
-#           type = "text", summary.stat = c("mean", "min", "p25", "median", "p75", "max"), 
-#           digits = 2, covariate.labels = variable_labels, title = "Summary", out = "../Results/Table1_PanelA.txt")
-# 
-# stargazer(filing_data_filtered[, c("atq","roa","leverage", "revtq")],
-#           type = "text", summary.stat = c("mean", "min", "p25", "median", "p75", "max"), 
-#           digits = 2, covariate.labels = variable_labels_firm, title = "Summary", out = "../Results/Table1_PanelB.txt")
-
-#stargazer(filing_data_filtered[, c("xrdq","ppegtq")],
-#          type = "text", summary.stat = c("mean", "min", "p25", "median", "p75", "max"), 
-#          digits = 2, title = "Summary", out = "../Results/Table1_PanelB.txt")
-
-### Merge with Dealscan 
-dealscan_compq_matched <- read_dta("../Data/Cleaned/dealscan_compustat_matched.dta")
-# keep only needed variables
-dealscan_compq_matched <- dealscan_compq_matched %>%
-  select(gvkey, year, quarter, lead_arranger, deal_amount, deal_amount_converted, 
-         deal_purpose, tranche_active_date, tranche_maturity_date, seniority_type, 
-         secured, covenants, base_reference_rate, margin_bps, all_base_rate_spread_margin,
-         base_rate_margin_bps, floor_bps)
-
-# merge agreements with dealscan_compq_matched
-agreements_ds_matched <- agreements %>%
-  inner_join(dealscan_compq_matched, by = c("gvkey" = "gvkey", "year" = "year"), relationship = 'many-to-many')
-
-### Merge with Pitchbook (Nonbanks) ###
-#pitchbook <- fread("../Data/Cleaned/PitchBook_Cleaned.csv")
-#pitchbook <- pitchbook %>%
-#  select("Issue Date", "Lenders", "Company", "Ticker", "Deal Size", "Deal Type 1", "Spread/Interest Rate")
-# generate year and quarter from filing date
-#pitchbook <- pitchbook %>%
-#  mutate(year = year(`Issue Date`), quarter = quarter(`Issue Date`))
-  
-# ### merge back to nonbank_loan
-# nonbank_loan_with_deal_info <- nonbank_loan %>%
-#   inner_join(nonbank_contracts_extracted, by = c("file_name" = "accession"))
-# 
-# ### merge with filing_data_merged
-# all_merged_deals <- bind_rows(filing_data_merged, nonbank_loan_with_deal_info)
-# # format tranche dates as date format
-# all_merged_deals <- all_merged_deals %>%
-#   mutate(tranche_active_date = as.Date(tranche_active_date, format = "%Y-%m-%d"),
-#          tranche_maturity_date = as.Date(tranche_maturity_date, format = "%Y-%m-%d"))
-# 
-# # replace tranche active date with fdate if it's NA
-# all_merged_deals <- all_merged_deals %>%
-#   mutate(tranche_active_date = ifelse(is.na(tranche_active_date), fdate, tranche_active_date))
-# # replace tranche maturity date with maturity1 if it's NA
-# all_merged_deals <- all_merged_deals %>%
-#   mutate(tranche_maturity_date = ifelse(is.na(tranche_maturity_date), maturity1, tranche_maturity_date))
-# # replace margin_bps with interest_spread1*100 if it's NA
-# all_merged_deals <- all_merged_deals %>%
-#   mutate(margin_bps = ifelse(is.na(margin_bps), interest_spread1*100, margin_bps))
-# # generate maturity = tranche_maturity_date - tranche_active_date
-# all_merged_deals <- all_merged_deals %>%
-#   mutate(maturity =  as.numeric(tranche_maturity_date - tranche_active_date) / 365)
-# 
-# # keep only variables useful for analysis 
-# all_merged_deals <- all_merged_deals %>%
-#   select(fdate, gvkey, tic, coname, lender_chatgpt, lender_is_nonbank, year, quarter, monthly_fs, projected_fs, lender_meeting, 
-#          atq, revtq, niq, ibq, ltq, xrdq, ppegtq, roa, leverage, lead_arranger, deal_amount, 
-#          tranche_active_date, tranche_maturity_date, maturity, margin_bps)
-# 
-# # save in Cleaned Data folder
-# write.csv(all_merged_deals, "../Data/Cleaned/all_merged_deals.csv", row.names = FALSE)
-# 
-# all_merged_deals %>%
-#   group_by(year, lender_is_nonbank) %>%
-#   summarise(monthly_fs = mean(monthly_fs), projected_fs = mean(projected_fs), lender_meeting = mean(lender_meeting)) %>%
-#   gather(key = "variable", value = "value", -year, -lender_is_nonbank) %>%
-#   ggplot(aes(x = year, y = value, color = variable, linetype = factor(lender_is_nonbank))) +
-#   geom_line() +
-#   theme_minimal() +
-#   labs(title = "Time Series of Monthly FS, Projected FS, and Lender Meeting by Year",
-#        x = "Year",
-#        y = "Frequency",
-#        color = "Variable",
-#        linetype = "Lender is Bank") +
-#   theme(legend.position = c(0.1, 0.8),    # Position legend inside the plot
-#         legend.background = element_blank(),  # Remove legend background fill
-#         legend.box.background = element_blank(),  # Remove legend border color
-#         legend.text = element_text(size = 4),  # Smaller text inside the legend
-#         legend.title = element_text(size = 4),  # Smaller title inside the legend
-#         legend.key.size = unit(0.5, "cm"),  # Smaller keys in the legend
-#         legend.spacing.y = unit(0.2, "cm"),  # Smaller vertical spacing
-#         legend.spacing.x = unit(0.2, "cm")) +  # Smaller horizontal spacing
-#   guides(color = guide_legend(title = "Variable"), 
-#          linetype = guide_legend(title = "Lender is Bank"))
-# # save figure as pdf 
-# ggsave("../Results/Figure1_all_merged.pdf")
-
