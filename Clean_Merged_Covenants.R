@@ -420,9 +420,17 @@ compq = fread("../Data/Cleaned/crsp_compustat_quarterly_cleaned.csv")
 agreements_compq_merged <- agreements %>%
   left_join(compq, by = c("gvkey" = "gvkey", "year" = "fyearq", "quarter" = "fqtr"))
 
+# generate the max and min of last_year_revenue and last_year_ebitda for lender_is_nonbank == 1 and lender_is_nonbank == 0
+agreements_compq_merged %>%
+  group_by(lender_is_nonbank) %>%
+  summarise(min_last_year_revenue = min(last_year_revenue, na.rm = TRUE),
+            max_last_year_revenue = max(last_year_revenue, na.rm = TRUE),
+            min_last_year_ebitda = min(last_year_ebitda, na.rm = TRUE),
+            max_last_year_ebitda = max(last_year_ebitda, na.rm = TRUE))
+
 # keep only those firms with revenue between 10,000,000 and 1,000,000,000
 agreements_mm <- agreements_compq_merged %>%
-  filter(revenue >= 10 & revenue <= 1000)
+  filter(last_year_revenue >= 10 & last_year_revenue <= 1000)
 
 # time series plots of the number of credit agreements by year by lender_is_nonbank
 plot_agreements_ts(agreements_mm, lender_is_nonbank)
