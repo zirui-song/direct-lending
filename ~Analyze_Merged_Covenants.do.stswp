@@ -20,7 +20,7 @@ global logdir "$repodir/Code/LogFiles"
 
 import delimited "$cleandir/agreements_mm_dealinfo.csv", clear
 keep if year >= 2010
-destring ebitda-current_ratio market_cap market_to_book rolling_12m_return-last_year_tangibility ///
+destring ebitda-current_ratio market_cap market_to_book rolling_12m_return-tangibility ///
          sales_growth leverage_growth sic deal_amount1 interest_spread1 lender_is_private_credit debt, ///
          replace ignore("NA Inf")
 
@@ -148,7 +148,7 @@ use "$intdir/intermediate_data_after_main_regression.dta", replace
 gen ln_deal_amount = ln(deal_amount1)
 la var ln_deal_amount "Ln(Deal Amount)"
 
-local all_borr_cov "assets last_year_revenue prev_ebitda_dummy last_year_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity last_year_tangibility current_ratio rolling_12m_return rolling_12m_vol"
+local all_borr_cov "assets last_year_revenue prev_ebitda_dummy last_year_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity tangibility current_ratio rolling_12m_return rolling_12m_vol"
 local all_deal_vars "deal_amount1 maturity_year interest_spread1 floating asset_based second_lien" 	 
 
 * winsorize at 1%-99%s
@@ -167,7 +167,7 @@ la var assets "Total Assets (Million USD)"
 la var last_year_revenue "Revenue (Million USD)"
 la var debt "Debt (Million USD)"
 la var last_year_rnd_intensity "R\&D Intensity"
-la var last_year_tangibility "Tangibility"
+la var tangibility "Tangibility"
 la var leverage "Leverage Ratio"
 la var last_year_ebitda "EBITDA (Million USD)"
 la var debt_to_ebitda "Debt/EBITDA"
@@ -189,9 +189,9 @@ dtable i.ff_12, by(lender_is_nonbank) export("$tabdir/tabulation_ff12_all.tex", 
 dtable i.ff_12, by(lender_is_private_credit) export("$tabdir/tabulation_ff12_pc.tex", tableonly replace) note("Panel A: Number of Deals By Industry")
 dtable i.ff_12, by(lender_is_other_nonbank) export("$tabdir/tabulation_ff12_other.tex", tableonly replace) note("Panel A: Number of Deals By Industry")
 
-local all_borr_cov "assets last_year_revenue prev_ebitda_dummy last_year_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity last_year_tangibility current_ratio rolling_12m_return rolling_12m_vol"
+local all_borr_cov "assets last_year_revenue prev_ebitda_dummy last_year_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity tangibility current_ratio rolling_12m_return rolling_12m_vol"
 
-local all_deal_vars "deal_amount1 maturity_year interest_spread1 floating asset_based second_lien" 	 
+local all_deal_vars "deal_amount1 maturity_year interest_spread1 floating" 	 
 
 * Panel B (Summary Statistics by Banks and Nonbanks Respectively)
 estpost sum monthly_fs-lender_meeting `all_borr_cov' `all_deal_vars' if lender_is_nonbank == 0, de
@@ -309,10 +309,10 @@ graph export "$figdir/Figure2_lendermeeting.pdf", replace
 
 *** Determinant Regressions (Table III)
 
-local all_borr_cov "assets last_year_revenue prev_ebitda_dummy last_year_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity last_year_tangibility current_ratio rolling_12m_return rolling_12m_vol"
+local all_borr_cov "assets last_year_revenue prev_ebitda_dummy last_year_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity tangibility current_ratio rolling_12m_return rolling_12m_vol"
 local all_deal_vars "deal_amount1 maturity_year interest_spread1 floating asset_based second_lien" 	 
 
-local borr_vars "ln_assets prev_ebitda_dummy scaled_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity last_year_tangibility rolling_12m_return rolling_12m_vol"
+local borr_vars "ln_assets prev_ebitda_dummy scaled_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity tangibility rolling_12m_return rolling_12m_vol"
 local deal_vars "ln_deal_amount maturity_year interest_spread1"	
 local y_vars "lender_is_nonbank lender_is_private_credit lender_is_other_nonbank" 
 local info_vars "monthly_fs projected_fs lender_meeting hard_info info_n all_info"
@@ -341,7 +341,7 @@ eststo clear
 	
 	use "$cleandir/final_regression_sample.dta", clear
 
-local borr_vars "ln_assets prev_ebitda_dummy scaled_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity last_year_tangibility rolling_12m_return rolling_12m_vol"
+local borr_vars "ln_assets prev_ebitda_dummy scaled_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity tangibility rolling_12m_return rolling_12m_vol"
 local deal_vars "ln_deal_amount maturity_year interest_spread1"	
 local y_vars "lender_is_nonbank lender_is_private_credit lender_is_other_nonbank" 
 local info_vars "monthly_fs projected_fs lender_meeting hard_info info_n all_info"	
@@ -396,7 +396,7 @@ eststo clear
 
 	use "$cleandir/final_regression_sample.dta", clear
 
-local borr_vars "ln_assets prev_ebitda_dummy scaled_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity last_year_tangibility rolling_12m_return rolling_12m_vol"
+local borr_vars "ln_assets prev_ebitda_dummy scaled_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity tangibility rolling_12m_return rolling_12m_vol"
 local deal_vars "ln_deal_amount maturity_year interest_spread1"	
 local y_vars "lender_is_nonbank lender_is_private_credit lender_is_other_nonbank" 
 local info_vars "monthly_fs projected_fs lender_meeting hard_info info_n all_info"	
@@ -428,7 +428,7 @@ eststo clear
 	
 use "$cleandir/final_regression_sample.dta", clear
 
-local borr_vars "ln_assets prev_ebitda_dummy scaled_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity last_year_tangibility rolling_12m_return rolling_12m_vol"
+local borr_vars "ln_assets prev_ebitda_dummy scaled_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity tangibility rolling_12m_return rolling_12m_vol"
 local deal_vars "ln_deal_amount maturity_year interest_spread1"	
 local y_vars "lender_is_nonbank lender_is_private_credit lender_is_other_nonbank" 
 local info_vars "monthly_fs projected_fs lender_meeting hard_info info_n all_info"	
@@ -561,7 +561,7 @@ reghdfe monthly_fs treat post treat_post maturity_year interest_spread1, absorb(
 * Year-Indutry FE with Treat and Treat_Post
 la var treat_post "Treat*Post"
 
-local borr_vars "ln_assets prev_ebitda_dummy scaled_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity last_year_tangibility rolling_12m_return rolling_12m_vol"
+local borr_vars "ln_assets prev_ebitda_dummy scaled_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity tangibility rolling_12m_return rolling_12m_vol"
 local deal_vars "ln_deal_amount maturity_year interest_spread1"	
 local info_vars "monthly_fs projected_fs lender_meeting hard_info info_n all_info"
 eststo: reghdfe lender_is_nonbank treat_post `deal_vars' `borr_vars', absorb(year ff_12)
@@ -591,7 +591,7 @@ eststo clear
 	***************/
 	use "$cleandir/final_regression_sample.dta", clear
 
-local borr_vars "ln_assets prev_ebitda_dummy scaled_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity last_year_tangibility rolling_12m_return rolling_12m_vol"
+local borr_vars "ln_assets prev_ebitda_dummy scaled_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity tangibility rolling_12m_return rolling_12m_vol"
 local deal_vars "ln_deal_amount maturity_year interest_spread1"	
 local y_vars "lender_is_nonbank lender_is_private_credit" 
 local info_vars "monthly_fs projected_fs lender_meeting hard_info info_n all_info"
