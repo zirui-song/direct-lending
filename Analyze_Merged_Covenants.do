@@ -318,7 +318,7 @@ local y_vars "lender_is_nonbank lender_is_private_credit lender_is_other_nonbank
 local info_vars "monthly_fs projected_fs lender_meeting hard_info info_n all_info"
 	
 foreach var of varlist `y_vars' {
-	eststo: reghdfe `var' `borr_vars' `deal_vars', absorb(ff_12 year) vce(cluster gvkey)
+	eststo: reghdfe `var' `borr_vars', absorb(ff_12 year) vce(cluster gvkey)
 }	
 esttab using "$tabdir/Table3_treatment.tex", replace ///
 nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
