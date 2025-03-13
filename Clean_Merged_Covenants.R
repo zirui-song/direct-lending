@@ -101,6 +101,9 @@ lender_names <- preqin_names %>%
   select(lender_name_cleaned) %>%
   distinct()
 
+# save preqin_names as csv
+write.csv(preqin_names, "../Data/Cleaned/preqin_names.csv", row.names = FALSE)
+
 ##################################################
   # Section 1: Data Cleaning (Agreements + SEC filing mapping)
 ##################################################
