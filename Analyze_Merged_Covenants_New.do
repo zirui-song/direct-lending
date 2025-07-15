@@ -214,6 +214,12 @@ foreach var of varlist `info_vars' {
 esttab using "$tabdir/Table4_main_regression_all.tex", replace ///
 nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
 star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+
+esttab using "$tabdir/Table4_main_regression_all_noctrl.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant ///
+keep(nonbank_lender)
+
 * clear storeed est
 eststo clear
 
@@ -225,6 +231,12 @@ foreach var of varlist `info_vars' {
 esttab using "$tabdir/Table4_main_regression_pc.tex", replace ///
 nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
 star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+
+esttab using "$tabdir/Table4_main_regression_pc_noctrl.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant ///
+keep(private_credit_lender)
+
 * clear storeed est
 eststo clear
 
@@ -236,6 +248,12 @@ foreach var of varlist `info_vars' {
 esttab using "$tabdir/Table4_main_regression_other.tex", replace ///
 nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
 star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+
+esttab using "$tabdir/Table4_main_regression_other_noctrl.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant ///
+keep(other_nonbank_lender)
+
 * clear storeed est
 eststo clear
 
@@ -256,6 +274,12 @@ foreach var of varlist `info_vars' {
 esttab using "$tabdir/Table4_main_regression.tex", replace ///
 nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
 star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+
+esttab using "$tabdir/Table4_main_regression_noctrl.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant ///
+keep(nonbank_lender nonbank_pc_inter)
+
 * clear storeed est
 eststo clear
 
@@ -266,6 +290,12 @@ foreach var of varlist `info_vars' {
 esttab using "$tabdir/Table4_main_regression_gvkey_all.tex", replace ///
 nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
 star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+
+esttab using "$tabdir/Table4_main_regression_gvkey_all_noctrl.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant ///
+keep(private_credit_lender)
+
 * clear storeed est
 eststo clear
 
@@ -328,6 +358,12 @@ test nonbank_lender + nonbank_pc_inter = 0
 esttab using "$tabdir/main_regression_robustness.tex", replace ///
 nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
 star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+
+esttab using "$tabdir/main_regression_robustness_noctrl.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant ///
+keep(nonbank_lender nonbank_pc_inter)
+
 * clear storeed est
 eststo clear
 
@@ -543,6 +579,11 @@ la var big_nonbank_pc_inter "Nonbank Lender x Private Credit x Large"
 	esttab using "$tabdir/Table7.tex", replace ///
 	nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
 	star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+	
+	esttab using "$tabdir/Table7_noctrl.tex", replace ///
+	nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+	star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant ///
+	keep(nonbank_lender nonbank_pc_inter big_nonbank_inter big_nonbank_pc_inter)
 	* clear storeed est
 	eststo clear
 
@@ -606,6 +647,12 @@ foreach var of varlist `info_vars' {
 esttab using "$tabdir/Table8_industry.tex", replace ///
 nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
 star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+
+esttab using "$tabdir/Table8_industry_noctrl.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant ///
+keep(nonbank_lender nonbank_pc_inter inter inter_pc)
+
 * clear storeed est
 eststo clear
 
