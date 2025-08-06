@@ -1,0 +1,14 @@
+		(1)
+VARIABLES	LABELS	Monthly Financial Statement
+		
+RD_Estimate		0.440***
+		(0.140)
+		
+Observations		2,206
+RD estimate		0.440
+Robust standard error		0.170
+Bandwidth		40.73
+LHS Observations		210
+RHS Observations		629
+Standard errors in parentheses		
+*** p<0.01, ** p<0.05, * p<0.1		

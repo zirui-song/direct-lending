@@ -12,13 +12,13 @@ global tabdir "/Users/zrsong/MIT Dropbox/Zirui Song/Apps/Overleaf/Information Co
 global figdir "/Users/zrsong/MIT Dropbox/Zirui Song/Apps/Overleaf/Information Covenants of Nonbank Direct Lending/Figures"
 global logdir "$repodir/Code/LogFiles"
 
-*log using "$logdir/Analyze_Merged_Covenants.log", text replace
+log using "$logdir/Analyze_Merged_Covenants.log", text replace
 
 /**************
 	Data Cleaning
 	***************/
 
-use "$cleandir/agreements_mm_clean202503.dta", clear
+use "$cleandir/agreements_mm_clean202507.dta", clear
 
 * generate margin 
 gen margin_bps = clean_rate*100
@@ -28,6 +28,22 @@ sicff sic, ind(12)
 
 label define ff_12_lab 1 "Consumer NonDurables" 2 "Consumer Durables" 3 "Manufacturing" 4 "Oil, Gas, and Coal Extraction and Products" 5 "Chemicals and Allied Products" 6 "Business Equipment" 7 "Telephone and Television Transmission" 8 "Utilities" 9 "Wholesale, Retail, and Some Services" 10 "Healthcare, Medical Equipment, and Drugs" 11 "Finance" 12 "Other"
 label values ff_12 ff_12_lab
+
+* drop finance and utilities
+drop if ff_12 == 11 | ff_12 == 8
+
+/*tempfile data
+save `data'
+
+*** check with previous pulled sample to maximize sample size (using agreements_mm_clean202507)
+import delimited "$intdir/full_sample_without_int.csv", clear
+keep accession type_attachment 
+
+merge 1:m accession type_attachment using `data'
+keep if _merge == 1
+keep accession type_attachment
+export delimited "$intdir/old_extraction_unmerged.csv", replace */
+
 
 egen hard_info = rowmax(monthly_fs projected_fs)
 gen info_n = monthly_fs + projected_fs + lender_meeting
@@ -68,7 +84,7 @@ la var nonbank_pc_inter "Nonbank Lender x Private Credit"
 gen maturity = maturity_months / 12
 
 local all_borr_cov "assets last_year_revenue prev_ebitda_dummy last_year_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity tangibility current_ratio rolling_12m_return rolling_12m_vol"
-local all_deal_vars "facility_amount ln_amount maturity clean_rate multiple_facilities term_loan secured_dummy" 	 
+local all_deal_vars "facility_amount ln_amount maturity clean_rate term_loan multiple_facilities secured_dummy" 	 
 
 * winsorize at 1%-99%s
 winsor2 `all_borr_cov' `all_deal_vars', cuts(1 99) replace
@@ -174,7 +190,6 @@ local deal_vars "ln_amount maturity clean_rate term_loan secured_dummy"
 local y_vars "nonbank_lender private_credit_lender other_nonbank_lender" 
 local info_vars "monthly_fs projected_fs lender_meeting info_n all_info"
 
-
 eststo: reghdfe nonbank_lender `var' `borr_vars', absorb(ff_12 year) vce(cluster gvkey)
 eststo: reghdfe private_credit_lender `var' `borr_vars' if other_nonbank_lender == 0, absorb(ff_12 year) vce(cluster gvkey)
 eststo: reghdfe other_nonbank_lender `var' `borr_vars' if private_credit_lender == 0, absorb(ff_12 year) vce(cluster gvkey)
@@ -269,7 +284,7 @@ local info_vars "monthly_fs projected_fs lender_meeting info_n all_info"
 
 foreach var of varlist `info_vars' {
 	eststo: reghdfe `var' nonbank_lender nonbank_pc_inter `borr_vars' `deal_vars', absorb(ff_12 year) vce(cluster gvkey)
-	*test nonbank_lender + nonbank_pc_inter = 0 
+	test nonbank_lender + nonbank_pc_inter = 0 
 }
 esttab using "$tabdir/Table4_main_regression.tex", replace ///
 nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
@@ -314,23 +329,17 @@ corr `borr_vars' `deal_vars' `y_vars' `info_vars'
 
 eststo: reghdfe monthly_fs nonbank_lender `deal_vars', absorb(gvkey year) vce(cluster gvkey)
 eststo: reghdfe monthly_fs nonbank_lender `borr_vars' `deal_vars', absorb(gvkey year) vce(cluster gvkey)
-eststo: reghdfe projected_fs nonbank_lender `deal_vars', absorb(gvkey year) vce(cluster gvkey)
-
-eststo: reghdfe projected_fs nonbank_lender `borr_vars' `deal_vars', absorb(gvkey year) vce(cluster gvkey)
-
-eststo: reghdfe lender_meeting nonbank_lender `deal_vars', absorb(gvkey year) vce(cluster gvkey)
-
-eststo: reghdfe lender_meeting nonbank_lender `borr_vars' `deal_vars', absorb(gvkey year) vce(cluster gvkey)
 
 eststo: reghdfe all_info nonbank_lender `deal_vars', absorb(gvkey year) vce(cluster gvkey)
-
 eststo: reghdfe all_info nonbank_lender `borr_vars' `deal_vars', absorb(gvkey year) vce(cluster gvkey)
-esttab using "$tabdir/main_regression_robustness_original.tex", replace ///
+
+esttab using "$tabdir/main_regression_robustness_all.tex", replace ///
 nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
 star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
 * clear storeed est
 eststo clear
 
+*** regression with private credit interaction
 
 eststo: reghdfe monthly_fs nonbank_lender nonbank_pc_inter `deal_vars', absorb(gvkey year) vce(cluster gvkey)
 test nonbank_lender + nonbank_pc_inter = 0
@@ -350,11 +359,18 @@ test nonbank_lender + nonbank_pc_inter = 0
 eststo: reghdfe lender_meeting nonbank_lender nonbank_pc_inter `borr_vars' `deal_vars', absorb(gvkey year) vce(cluster gvkey)
 test nonbank_lender + nonbank_pc_inter = 0
 
+eststo: reghdfe info_n nonbank_lender nonbank_pc_inter `deal_vars', absorb(gvkey year) vce(cluster gvkey)
+test nonbank_lender + nonbank_pc_inter = 0
+
+eststo: reghdfe info_n nonbank_lender nonbank_pc_inter `borr_vars' `deal_vars', absorb(gvkey year) vce(cluster gvkey)
+test nonbank_lender + nonbank_pc_inter = 0
+
 eststo: reghdfe all_info nonbank_lender nonbank_pc_inter `deal_vars', absorb(gvkey year) vce(cluster gvkey)
 test nonbank_lender + nonbank_pc_inter = 0
 
 eststo: reghdfe all_info nonbank_lender nonbank_pc_inter `borr_vars' `deal_vars', absorb(gvkey year) vce(cluster gvkey)
 test nonbank_lender + nonbank_pc_inter = 0
+
 esttab using "$tabdir/main_regression_robustness.tex", replace ///
 nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
 star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
@@ -422,10 +438,16 @@ graph export "$figdir/Figure5_psm_other.pdf", replace
 /**************
 	Regression Discontinuity Design Around prev_ebitda == 0
 	***************/
+	
+local borr_rd_vars "ln_assets debt_to_ebitda leverage market_to_book last_year_rnd_intensity tangibility rolling_12m_return rolling_12m_vol"
+local deal_vars "ln_amount maturity clean_rate term_loan secured_dummy"
+
+*** discontinuity at debt-to-ebitda 6
 	use "$cleandir/final_regression_sample.dta", clear
 	
 drop if secured_dummy != 1
 drop if prev_ebitda < 0
+drop if year < 2013
 
 * check for binds around debt_to_ebitda_gr6
 egen debt_to_ebitda_bins = cut(debt_to_ebitda), at(6 8 10 12 14)
@@ -437,26 +459,54 @@ restore
 
 rddensity debt_to_ebitda, c(6) plot
 rdrobust nonbank_lender debt_to_ebitda, c(6)
-rdrobust monthly_fs debt_to_ebitda, c(6) fuzzy(nonbank_lender)
+rdrobust monthly_fs debt_to_ebitda, c(6) fuzzy(nonbank_lender) covs(`borr_vars' `deal_vars')
 
-	use "$cleandir/final_regression_sample.dta", clear
-	drop if secured_dummy != 1
-
-* check for share of nonbank loans for over prev_ebitda
-egen prev_ebitda_bins = cut(last_year_ebitda), at(-50 -20 -10 -5 -1 5 10 20 50)
 preserve
-	collapse (mean) nonbank_lender (count) gvkey, by(prev_ebitda_bins)
-	scatter nonbank_lender prev_ebitda_bins
-	*scatter gvkey prev_ebitda_bins
+	drop if other_nonbank_lender == 1
+	rdrobust lender_meeting debt_to_ebitda, c(6) fuzzy(private_credit_lender)
 restore
 
-histogram last_year_ebitda, bin(50) normal kdensity freq
+*** discontinuity at zero ebitda
+
+use "$cleandir/final_regression_sample.dta", clear
+local borr_rd_vars "ln_assets debt_to_ebitda leverage market_to_book last_year_rnd_intensity tangibility rolling_12m_return rolling_12m_vol"
+local deal_vars "ln_amount maturity clean_rate term_loan secured_dummy"
+
+* create bins at your specified cut‐points
+egen prev_ebitda_bins = cut(last_year_ebitda), ///
+    at(-50 -25 -15 -10 -5 0 5 10 15 20 25 30 40 50 75 100 125 150 200)
+
+preserve
+    collapse (mean) nonbank_lender (count) gvkey, by(prev_ebitda_bins)
+
+    twoway ///
+        (scatter nonbank_lender prev_ebitda_bins, msize(medium)) ///
+        (lfit   nonbank_lender prev_ebitda_bins if prev_ebitda_bins < 0, lpattern(solid)) ///
+        (lfit   nonbank_lender prev_ebitda_bins if prev_ebitda_bins >= 0, lpattern(dash)) ///
+    , ///
+        title("") ///
+        xtitle("EBITDA bin") ///
+        ytitle("Mean share of nonbank lenders") ///
+        legend( ///
+            order(1 "EBITDA Bin Means" 2 "LHS Linear Fit" 3 "RHS Linear Fit") ///
+            position(3) ring(0) cols(1) ///
+        )
+	graph export "$figdir/loan_fraction_by_ebitda.png", replace
+
+restore
+
+histogram last_year_ebitda if abs(last_year_ebitda) <= 25, bin(50)
+graph export "$figdir/hist_ebitda.png", replace
 
 rddensity last_year_ebitda, c(0) plot
 
-rdrobust nonbank_lender last_year_ebitda, c(0)
-rdrobust monthly_fs last_year_ebitda, c(0) fuzzy(nonbank_lender)
-
+use "$cleandir/final_regression_sample.dta", clear
+local borr_rd_vars "ln_assets debt_to_ebitda leverage market_to_book last_year_rnd_intensity tangibility rolling_12m_return rolling_12m_vol"
+local deal_vars "ln_amount maturity clean_rate term_loan secured_dummy"
+rdrobust nonbank_lender last_year_ebitda, c(0) h(25)
+winsor2 last_year_ebitda, cuts(5 95) replace
+rdrobust monthly_fs last_year_ebitda, c(0) fuzzy(nonbank_lender) covs(`borr_rd_vars') 
+			
 /**************
 	DiD
 	***************/
@@ -476,9 +526,9 @@ replace post = 0 if post == .
 gen treat_post = debt_to_ebitda_gr6 * post
 
 *TWFE
-reghdfe nonbank_lender debt_to_ebitda_gr6 treat_post `deal_vars' ln_assets leverage, absorb(year ff_12)
+reghdfe nonbank_lender debt_to_ebitda_gr6 treat_post `deal_vars' ln_assets  market_to_book last_year_rnd_intensity tangibility rolling_12m_return rolling_12m_vol, absorb(year ff_12)
 */
-reghdfe projected_fs debt_to_ebitda_gr6 treat_post `deal_vars' ln_assets leverage, absorb(year ff_12)
+reghdfe monthly_fs debt_to_ebitda_gr6 treat_post `deal_vars' ln_assets  market_to_book last_year_rnd_intensity tangibility rolling_12m_return rolling_12m_vol, absorb(year ff_12)
 *** in 2013 SNC guideline says that firms with <0 ebitda is substandard -> after 2013 firms
 *	with < 0 ebitda is less likely to borrow from banks and more likely to borrow from PCs
 * 	Treat: < EBITDA, Post: 2014 onward
@@ -515,7 +565,6 @@ eststo clear
 /**************
 	Cross-Sectional Tests
 	***************/
-	use "$cleandir/final_regression_sample.dta", clear
 
 local borr_vars "ln_assets prev_ebitda_dummy scaled_ebitda debt_to_ebitda leverage market_to_book last_year_rnd_intensity tangibility rolling_12m_return rolling_12m_vol"
 local deal_vars "ln_amount maturity clean_rate term_loan secured_dummy"
@@ -568,24 +617,43 @@ gen big_nonbank_inter = big * nonbank_lender
 replace big_nonbank_inter = 0 if big_nonbank_inter == .
 la var big_nonbank_inter "Nonbank Lender x Large"
 
+* test
+reghdfe monthly_fs nonbank_lender big_nonbank_inter `borr_vars' `deal_vars', absorb(year ff_12) vce(cluster gvkey)
+reghdfe projected_fs nonbank_lender big_nonbank_inter `borr_vars' `deal_vars', absorb(year ff_12) vce(cluster gvkey)
+reghdfe all_info nonbank_lender big_nonbank_inter `borr_vars' `deal_vars', absorb(year ff_12) vce(cluster gvkey)
+
 gen big_nonbank_pc_inter = big_nonbank_inter * nonbank_pc_inter
 replace big_nonbank_pc_inter = 0 if big_nonbank_pc_inter == .
 la var big_nonbank_pc_inter "Nonbank Lender x Private Credit x Large"
 
 *** Dec 12 Update: Regression with bank and nonbank + nonbank*big
-	foreach var of varlist `info_vars' {
-		eststo: reghdfe `var' nonbank_lender nonbank_pc_inter big_nonbank_inter big_nonbank_pc_inter `borr_vars' `deal_vars', absorb(year ff_12) vce(cluster gvkey)
-	}
-	esttab using "$tabdir/Table7.tex", replace ///
-	nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
-	star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
-	
-	esttab using "$tabdir/Table7_noctrl.tex", replace ///
-	nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
-	star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant ///
-	keep(nonbank_lender nonbank_pc_inter big_nonbank_inter big_nonbank_pc_inter)
-	* clear storeed est
-	eststo clear
+foreach var of varlist `info_vars' {
+	eststo: reghdfe `var' nonbank_lender nonbank_pc_inter big_nonbank_inter big_nonbank_pc_inter `borr_vars' `deal_vars', absorb(year ff_12) vce(cluster gvkey)
+}
+esttab using "$tabdir/Table7.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+
+esttab using "$tabdir/Table7_noctrl.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant ///
+keep(nonbank_lender nonbank_pc_inter big_nonbank_inter big_nonbank_pc_inter)
+* clear storeed est
+eststo clear
+
+foreach var of varlist `info_vars' {
+	eststo: reghdfe `var' nonbank_lender big_nonbank_inter `borr_vars' `deal_vars', absorb(year ff_12) vce(cluster gvkey)
+}
+esttab using "$tabdir/Table7_all.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+
+esttab using "$tabdir/Table7_all_noctrl.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant ///
+keep(nonbank_lender big_nonbank_inter)
+* clear storeed est
+eststo clear
 
 *** Same/Different Industry (Specialization)
 
@@ -657,5 +725,21 @@ keep(nonbank_lender nonbank_pc_inter inter inter_pc)
 eststo clear
 
 
+foreach var of varlist `info_vars' {
+	eststo: reghdfe `var' nonbank_lender inter `borr_vars' `deal_vars', absorb(year ff_12) vce(cluster gvkey)
+}
+esttab using "$tabdir/Table8_industry_all.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+
+esttab using "$tabdir/Table8_industry_all_noctrl.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant ///
+keep(nonbank_lender inter)
+
+* clear storeed est
+eststo clear
+
+
 ********************************************************************************
-*log close 
+log close 

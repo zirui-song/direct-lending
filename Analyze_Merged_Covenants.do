@@ -45,6 +45,12 @@ sicff sic, ind(12)
 label define ff_12_lab 1 "Consumer NonDurables" 2 "Consumer Durables" 3 "Manufacturing" 4 "Oil, Gas, and Coal Extraction and Products" 5 "Chemicals and Allied Products" 6 "Business Equipment" 7 "Telephone and Television Transmission" 8 "Utilities" 9 "Wholesale, Retail, and Some Services" 10 "Healthcare, Medical Equipment, and Drugs" 11 "Finance" 12 "Other"
 label values ff_12 ff_12_lab
 
+* drop finance and utilites
+drop if ff_12 == 11 | ff_12 == 8
+
+export delimited "$intdir/full_sample_without_int.csv", replace
+save "$intdir/full_sample_without_int.dta", replace
+
 egen hard_info = rowmax(monthly_fs projected_fs)
 gen info_n = monthly_fs + projected_fs + lender_meeting
 egen all_info = rowmin(monthly_fs projected_fs lender_meeting)
@@ -67,9 +73,6 @@ winsor2 debt_to_ebitda, cuts(5 95) replace
 gen debt_to_ebitda_gr6 = 1 if debt_to_ebitda > 6
 replace debt_to_ebitda_gr6 = 1 if debt_to_ebitda < 0
 replace debt_to_ebitda_gr6 = 0 if debt_to_ebitda_gr6 == .
-
-export delimited "$intdir/full_sample_without_int.csv", replace
-save "$intdir/full_sample_without_int.dta", replace
 
 drop if deal_amount1 == .
 
@@ -708,4 +711,4 @@ eststo clear
 
 
 ********************************************************************************
-*log close 
+log close 
