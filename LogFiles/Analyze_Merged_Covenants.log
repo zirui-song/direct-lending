@@ -3,7 +3,7 @@
        log:  /Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/Direct Lend
 > ing/Code/LogFiles/Analyze_Merged_Covenants.log
   log type:  text
- opened on:   6 Aug 2025, 09:02:12
+ opened on:   7 Aug 2025, 14:17:58
 
 . 
 . /**************
@@ -2887,6 +2887,38 @@ lender_mee~g |   0.0754   0.1123   0.1861  -0.0526   0.1137   0.0878   1.0000
 
 
 . 
+. eststo: reghdfe monthly_fs nonbank_lender, absorb(gvkey year) vce(cluster gvk
+> ey)
+(dropped 539 singleton observations)
+(MWFE estimator converged in 10 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,942
+Absorbing 2 HDFE groups                           F(   1,    642) =      11.13
+Statistics robust to heteroskedasticity           Prob > F        =     0.0009
+                                                  R-squared       =     0.7279
+                                                  Adj R-squared   =     0.5890
+                                                  Within R-sq.    =     0.0318
+Number of clusters (gvkey)   =        643         Root MSE        =     0.2652
+
+                                (Std. err. adjusted for 643 clusters in gvkey)
+------------------------------------------------------------------------------
+             |               Robust
+  monthly_fs | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+nonbank_le~r |   .1717955   .0514852     3.34   0.001     .0706958    .2728953
+       _cons |    .186469   .0097032    19.22   0.000     .1674152    .2055228
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+       gvkey |       643         643           0    *|
+        year |        14           1          13     |
+-----------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est1 stored)
+
 . eststo: reghdfe monthly_fs nonbank_lender `deal_vars', absorb(gvkey year) vce
 > (cluster gvkey)
 (dropped 512 singleton observations)
@@ -2922,7 +2954,7 @@ Absorbed degrees of freedom:
         year |        14           1          13     |
 -----------------------------------------------------+
 * = FE nested within cluster; treated as redundant for DoF computation
-(est1 stored)
+(est2 stored)
 
 . eststo: reghdfe monthly_fs nonbank_lender `borr_vars' `deal_vars', absorb(gvk
 > ey year) vce(cluster gvkey)
@@ -2969,9 +3001,41 @@ Absorbed degrees of freedom:
         year |        14           1          13     |
 -----------------------------------------------------+
 * = FE nested within cluster; treated as redundant for DoF computation
-(est2 stored)
+(est3 stored)
 
 . 
+. eststo: reghdfe all_info nonbank_lender, absorb(gvkey year) vce(cluster gvkey
+> )
+(dropped 539 singleton observations)
+(MWFE estimator converged in 10 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,942
+Absorbing 2 HDFE groups                           F(   1,    642) =       8.78
+Statistics robust to heteroskedasticity           Prob > F        =     0.0032
+                                                  R-squared       =     0.6725
+                                                  Adj R-squared   =     0.5053
+                                                  Within R-sq.    =     0.0428
+Number of clusters (gvkey)   =        643         Root MSE        =     0.1407
+
+                                (Std. err. adjusted for 643 clusters in gvkey)
+------------------------------------------------------------------------------
+             |               Robust
+    all_info | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+nonbank_le~r |   .1063465   .0358893     2.96   0.003     .0358719    .1768211
+       _cons |   .0216669   .0067639     3.20   0.001     .0083849     .034949
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+       gvkey |       643         643           0    *|
+        year |        14           1          13     |
+-----------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+(est4 stored)
+
 . eststo: reghdfe all_info nonbank_lender `deal_vars', absorb(gvkey year) vce(c
 > luster gvkey)
 (dropped 512 singleton observations)
@@ -3007,7 +3071,7 @@ Absorbed degrees of freedom:
         year |        14           1          13     |
 -----------------------------------------------------+
 * = FE nested within cluster; treated as redundant for DoF computation
-(est3 stored)
+(est5 stored)
 
 . eststo: reghdfe all_info nonbank_lender `borr_vars' `deal_vars', absorb(gvkey
 >  year) vce(cluster gvkey)
@@ -3054,7 +3118,7 @@ Absorbed degrees of freedom:
         year |        14           1          13     |
 -----------------------------------------------------+
 * = FE nested within cluster; treated as redundant for DoF computation
-(est4 stored)
+(est6 stored)
 
 . 
 . esttab using "$tabdir/main_regression_robustness_all.tex", replace ///
@@ -3063,6 +3127,15 @@ Absorbed degrees of freedom:
 (output written to /Users/zrsong/MIT Dropbox/Zirui Song/Apps/Overleaf/Informati
 > on Covenants of Nonbank Direct Lending/Tables/main_regression_robustness_all.
 > tex)
+
+. 
+. esttab using "$tabdir/main_regression_robustness_all_noctrl.tex", replace ///
+> nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+> star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant ///
+> keep(nonbank_lender)
+(output written to /Users/zrsong/MIT Dropbox/Zirui Song/Apps/Overleaf/Informati
+> on Covenants of Nonbank Direct Lending/Tables/main_regression_robustness_all_
+> noctrl.tex)
 
 . * clear storeed est
 . eststo clear
@@ -5241,8 +5314,8 @@ file /Users/zrsong/MIT Dropbox/Zirui Song/Apps/Overleaf/Information Covenants
 . restore
 
 . 
-. histogram last_year_ebitda if abs(last_year_ebitda) <= 25, bin(50)
-(bin=50, start=-24.899, width=.99708)
+. histogram last_year_ebitda if abs(last_year_ebitda) <= 40, bin(80)
+(bin=80, start=-39.707, width=.995725)
 
 . graph export "$figdir/hist_ebitda.png", replace
 file /Users/zrsong/MIT Dropbox/Zirui Song/Apps/Overleaf/Information Covenants
@@ -5389,6 +5462,219 @@ Treatment effect estimates. Outcome: monthly_fs. Running variable: last_year_eb
 Covariate-adjusted estimates. Additional covariates included: 8
 Estimates adjusted for mass points in the running variable.
 
+. rdrobust projected_fs last_year_ebitda, c(0) fuzzy(nonbank_lender) covs(`borr
+> _rd_vars') 
+Mass points detected in the running variable.
+
+Covariate-adjusted Fuzzy RD estimates using local polynomial regression.
+
+      Cutoff c = 0 | Left of c  Right of c            Number of obs =       220
+> 6
+-------------------+----------------------            BW type       =      mser
+> d
+     Number of obs |       367        1839            Kernel        = Triangula
+> r
+Eff. Number of obs |       219         663            VCE method    =         N
+> N
+    Order est. (p) |         1           1
+    Order bias (q) |         2           2
+       BW est. (h) |    45.060      45.060
+       BW bias (b) |    74.110      74.110
+         rho (h/b) |     0.608       0.608
+        Unique obs |       212        1169
+
+First-stage estimates. Outcome: nonbank_lender. Running variable: last_year_ebi
+> tda.
+-------------------------------------------------------------------------------
+> -
+            Method |   Coef.    Std. Err.    z     P>|z|    [95% Conf. Interval
+> ]
+-------------------+-----------------------------------------------------------
+> -
+      Conventional | -.49006     .05502   -8.9065  0.000   -.597904     -.38221
+> 9
+            Robust |     -          -     -7.5726  0.000   -.600528     -.35358
+> 3
+-------------------------------------------------------------------------------
+> -
+
+Treatment effect estimates. Outcome: projected_fs. Running variable: last_year_
+> ebitda. Treatment Status: nonbank_lender.
+-------------------------------------------------------------------------------
+> -
+            Method |   Coef.    Std. Err.    z     P>|z|    [95% Conf. Interval
+> ]
+-------------------+-----------------------------------------------------------
+> -
+      Conventional |  .05737     .11207   0.5119   0.609   -.162292      .27703
+> 2
+            Robust |     -          -     1.0205   0.307   -.122003      .38707
+> 1
+-------------------------------------------------------------------------------
+> -
+Covariate-adjusted estimates. Additional covariates included: 8
+Estimates adjusted for mass points in the running variable.
+
+. rdrobust lender_meeting last_year_ebitda, c(0) fuzzy(nonbank_lender) covs(`bo
+> rr_rd_vars') 
+Mass points detected in the running variable.
+
+Covariate-adjusted Fuzzy RD estimates using local polynomial regression.
+
+      Cutoff c = 0 | Left of c  Right of c            Number of obs =       220
+> 6
+-------------------+----------------------            BW type       =      mser
+> d
+     Number of obs |       367        1839            Kernel        = Triangula
+> r
+Eff. Number of obs |       200         581            VCE method    =         N
+> N
+    Order est. (p) |         1           1
+    Order bias (q) |         2           2
+       BW est. (h) |    36.221      36.221
+       BW bias (b) |    59.285      59.285
+         rho (h/b) |     0.611       0.611
+        Unique obs |       212        1169
+
+First-stage estimates. Outcome: nonbank_lender. Running variable: last_year_ebi
+> tda.
+-------------------------------------------------------------------------------
+> -
+            Method |   Coef.    Std. Err.    z     P>|z|    [95% Conf. Interval
+> ]
+-------------------+-----------------------------------------------------------
+> -
+      Conventional | -.48417     .05918   -8.1819  0.000   -.600157      -.3681
+> 9
+            Robust |     -          -     -6.8789  0.000   -.604164     -.33622
+> 4
+-------------------------------------------------------------------------------
+> -
+
+Treatment effect estimates. Outcome: lender_meeting. Running variable: last_yea
+> r_ebitda. Treatment Status: nonbank_lender.
+-------------------------------------------------------------------------------
+> -
+            Method |   Coef.    Std. Err.    z     P>|z|    [95% Conf. Interval
+> ]
+-------------------+-----------------------------------------------------------
+> -
+      Conventional |  .01053     .07664   0.1374   0.891   -.139679      .16074
+> 3
+            Robust |     -          -     -0.8266  0.408   -.250113      .10172
+> 6
+-------------------------------------------------------------------------------
+> -
+Covariate-adjusted estimates. Additional covariates included: 8
+Estimates adjusted for mass points in the running variable.
+
+. rdrobust info_n last_year_ebitda, c(0) fuzzy(nonbank_lender) covs(`borr_rd_va
+> rs') 
+Mass points detected in the running variable.
+
+Covariate-adjusted Fuzzy RD estimates using local polynomial regression.
+
+      Cutoff c = 0 | Left of c  Right of c            Number of obs =       220
+> 6
+-------------------+----------------------            BW type       =      mser
+> d
+     Number of obs |       367        1839            Kernel        = Triangula
+> r
+Eff. Number of obs |       210         631            VCE method    =         N
+> N
+    Order est. (p) |         1           1
+    Order bias (q) |         2           2
+       BW est. (h) |    40.852      40.852
+       BW bias (b) |    60.462      60.462
+         rho (h/b) |     0.676       0.676
+        Unique obs |       212        1169
+
+First-stage estimates. Outcome: nonbank_lender. Running variable: last_year_ebi
+> tda.
+-------------------------------------------------------------------------------
+> -
+            Method |   Coef.    Std. Err.    z     P>|z|    [95% Conf. Interval
+> ]
+-------------------+-----------------------------------------------------------
+> -
+      Conventional | -.49051     .05687   -8.6247  0.000   -.601974     -.37903
+> 8
+            Robust |     -          -     -7.0391  0.000   -.604994     -.34146
+> 3
+-------------------------------------------------------------------------------
+> -
+
+Treatment effect estimates. Outcome: info_n. Running variable: last_year_ebitda
+> . Treatment Status: nonbank_lender.
+-------------------------------------------------------------------------------
+> -
+            Method |   Coef.    Std. Err.    z     P>|z|    [95% Conf. Interval
+> ]
+-------------------+-----------------------------------------------------------
+> -
+      Conventional |  .51341     .23704   2.1659   0.030    .048815      .97799
+> 9
+            Robust |     -          -     1.6859   0.092   -.078654      1.0464
+> 3
+-------------------------------------------------------------------------------
+> -
+Covariate-adjusted estimates. Additional covariates included: 8
+Estimates adjusted for mass points in the running variable.
+
+. rdrobust all_info last_year_ebitda, c(0) fuzzy(nonbank_lender) covs(`borr_rd_
+> vars') 
+Mass points detected in the running variable.
+
+Covariate-adjusted Fuzzy RD estimates using local polynomial regression.
+
+      Cutoff c = 0 | Left of c  Right of c            Number of obs =       220
+> 6
+-------------------+----------------------            BW type       =      mser
+> d
+     Number of obs |       367        1839            Kernel        = Triangula
+> r
+Eff. Number of obs |       216         642            VCE method    =         N
+> N
+    Order est. (p) |         1           1
+    Order bias (q) |         2           2
+       BW est. (h) |    42.677      42.677
+       BW bias (b) |    60.063      60.063
+         rho (h/b) |     0.711       0.711
+        Unique obs |       212        1169
+
+First-stage estimates. Outcome: nonbank_lender. Running variable: last_year_ebi
+> tda.
+-------------------------------------------------------------------------------
+> -
+            Method |   Coef.    Std. Err.    z     P>|z|    [95% Conf. Interval
+> ]
+-------------------+-----------------------------------------------------------
+> -
+      Conventional | -.49064     .05601   -8.7599  0.000   -.600417     -.38086
+> 2
+            Robust |     -          -     -7.0112  0.000   -.602693     -.33934
+> 8
+-------------------------------------------------------------------------------
+> -
+
+Treatment effect estimates. Outcome: all_info. Running variable: last_year_ebit
+> da. Treatment Status: nonbank_lender.
+-------------------------------------------------------------------------------
+> -
+            Method |   Coef.    Std. Err.    z     P>|z|    [95% Conf. Interval
+> ]
+-------------------+-----------------------------------------------------------
+> -
+      Conventional |  .04683     .06815   0.6871   0.492   -.086751      .18040
+> 4
+            Robust |     -          -     0.3149   0.753    -.13047      .18041
+> 6
+-------------------------------------------------------------------------------
+> -
+Covariate-adjusted estimates. Additional covariates included: 8
+Estimates adjusted for mass points in the running variable.
+
+. 
 .                         
 . /**************
 >         DiD
@@ -7274,5 +7560,5 @@ Absorbed degrees of freedom:
        log:  /Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/Direct Lend
 > ing/Code/LogFiles/Analyze_Merged_Covenants.log
   log type:  text
- closed on:   6 Aug 2025, 09:02:25
+ closed on:   7 Aug 2025, 14:18:11
 -------------------------------------------------------------------------------

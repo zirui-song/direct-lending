@@ -327,15 +327,22 @@ local info_vars "monthly_fs projected_fs lender_meeting info_n all_info"
 
 corr `borr_vars' `deal_vars' `y_vars' `info_vars'
 
+eststo: reghdfe monthly_fs nonbank_lender, absorb(gvkey year) vce(cluster gvkey)
 eststo: reghdfe monthly_fs nonbank_lender `deal_vars', absorb(gvkey year) vce(cluster gvkey)
 eststo: reghdfe monthly_fs nonbank_lender `borr_vars' `deal_vars', absorb(gvkey year) vce(cluster gvkey)
 
+eststo: reghdfe all_info nonbank_lender, absorb(gvkey year) vce(cluster gvkey)
 eststo: reghdfe all_info nonbank_lender `deal_vars', absorb(gvkey year) vce(cluster gvkey)
 eststo: reghdfe all_info nonbank_lender `borr_vars' `deal_vars', absorb(gvkey year) vce(cluster gvkey)
 
 esttab using "$tabdir/main_regression_robustness_all.tex", replace ///
 nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
 star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant
+
+esttab using "$tabdir/main_regression_robustness_all_noctrl.tex", replace ///
+nodepvars nomti nonum collabels(none) label b(3) se(3) parentheses ///
+star(* 0.10 ** 0.05 *** 0.01) ar2 plain lines fragment noconstant ///
+keep(nonbank_lender)
 * clear storeed est
 eststo clear
 
@@ -495,7 +502,7 @@ preserve
 
 restore
 
-histogram last_year_ebitda if abs(last_year_ebitda) <= 25, bin(50)
+histogram last_year_ebitda if abs(last_year_ebitda) <= 40, bin(80)
 graph export "$figdir/hist_ebitda.png", replace
 
 rddensity last_year_ebitda, c(0) plot
@@ -506,6 +513,11 @@ local deal_vars "ln_amount maturity clean_rate term_loan secured_dummy"
 rdrobust nonbank_lender last_year_ebitda, c(0) h(25)
 winsor2 last_year_ebitda, cuts(5 95) replace
 rdrobust monthly_fs last_year_ebitda, c(0) fuzzy(nonbank_lender) covs(`borr_rd_vars') 
+rdrobust projected_fs last_year_ebitda, c(0) fuzzy(nonbank_lender) covs(`borr_rd_vars') 
+rdrobust lender_meeting last_year_ebitda, c(0) fuzzy(nonbank_lender) covs(`borr_rd_vars') 
+rdrobust info_n last_year_ebitda, c(0) fuzzy(nonbank_lender) covs(`borr_rd_vars') 
+rdrobust all_info last_year_ebitda, c(0) fuzzy(nonbank_lender) covs(`borr_rd_vars') 
+
 			
 /**************
 	DiD
