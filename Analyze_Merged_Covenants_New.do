@@ -99,7 +99,7 @@ la var other_nonbank_lender "Other Nonbank Lender"
 la var nonbank_lender "Nonbank Lender"
 la var private_credit_lender "Private Credit Lender"
 la var monthly_fs "Monthly Financial Statement"
-la var projected_fs "Annual Budget/Projection"
+la var projected_fs "Annual Projection/Budget Forecast"
 la var lender_meeting "Lender Meeting"
 
 la var assets "Total Assets (Million USD)"
