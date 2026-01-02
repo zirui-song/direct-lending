@@ -73,8 +73,8 @@ def main():
     extraction_df.to_csv(extraction_with_filing_id_path, index=False)
     print(f"Saved extraction with filing IDs to: {extraction_with_filing_id_path}")
     
-    # Step 3: Load SEC filing mapping (filter for years >= 2010)
-    print("\n3. Loading SEC filing mapping (years >= 1995)...")
+    # Step 3: Load SEC filing mapping (filter for years >= 1994)
+    print("\n3. Loading SEC filing mapping (years >= 1994)...")
     sec_mapping_path = os.path.join(raw_data_path, 'sec_filing_mapping_95to24.csv')
     
     if not os.path.exists(sec_mapping_path):
@@ -84,11 +84,11 @@ def main():
     sec_mapping_df = pd.read_csv(sec_mapping_path)
     print(f"Original SEC mapping: {len(sec_mapping_df)} records")
     
-    # Extract year from FDATE and filter for years >= 2010
+    # Extract year from FDATE and filter for years >= 1994
     sec_mapping_df['FDATE'] = pd.to_datetime(sec_mapping_df['FDATE'])
     sec_mapping_df['year'] = sec_mapping_df['FDATE'].dt.year
-    sec_mapping_df = sec_mapping_df[sec_mapping_df['year'] >= 2010]
-    print(f"After filtering for years >= 2010: {len(sec_mapping_df)} records")
+    sec_mapping_df = sec_mapping_df[sec_mapping_df['year'] >= 1994]
+    print(f"After filtering for years >= 1994: {len(sec_mapping_df)} records")
     
     # Extract filing ID from FName
     def extract_filing_id_from_fname(fname):
@@ -106,7 +106,7 @@ def main():
     print(f"After filing ID extraction: {len(sec_mapping_df)} records")
     
     # Save intermediate dataset
-    sec_mapping_filtered_path = os.path.join(intermediate_data_path, 'sec_mapping_filtered_2010plus.csv')
+    sec_mapping_filtered_path = os.path.join(intermediate_data_path, 'sec_mapping_filtered_1994to24.csv')
     sec_mapping_df.to_csv(sec_mapping_filtered_path, index=False)
     print(f"Saved filtered SEC mapping to: {sec_mapping_filtered_path}")
     

@@ -5,13 +5,13 @@
 Build a comprehensive panel of all agreements by:
 1) Inner joining firm financials (agreements_comp_crsp_merged.csv) with loan terms
    (loan_terms_cleaned_all_20251007.csv) using accession ↔ filing_id
-2) Left joining filtered nonbank results (filtered_batch_results.csv) on accession
-   to create an indicator column: nonbank_lender = 1 if matched, else 0
+2) Left joining direct loans from .nc files (3e_DirectLoans_FromNC.csv) on accession
+   to add direct_from_text indicator
 
 Inputs:
 - ../Data/Cleaned/agreements_comp_crsp_merged.csv
 - ../Data/Intermediate/loan_terms_cleaned_all_20251007.csv
-- ../Data/Raw/ExtractedAgreements_Bucketed/filtered_batch_results.csv
+- ../Data/Intermediate/3e_DirectLoans_FromNC.csv
 
 Output:
 - ../Data/Intermediate/5c_PanelAllLoans.csv
@@ -86,18 +86,18 @@ def winsorize_continuous_variables(df: pd.DataFrame, limits: tuple = (0.01, 0.01
 
 def main():
     print("=" * 80)
-    print("5c_PanelAllLoans.py - Build All-Agreements Panel with Nonbank Indicator")
+    print("5c_PanelAllLoans.py - Build All-Agreements Panel with Direct Loans Indicator")
     print("=" * 80)
 
     # Paths
     script_dir = Path(__file__).parent
     firm_financials_csv = script_dir / ".." / "Data" / "Cleaned" / "agreements_comp_crsp_merged.csv"
     loan_terms_csv = script_dir / ".." / "Data" / "Intermediate" / "loan_terms_cleaned_all_20251007.csv"
-    filtered_csv = script_dir / ".." / "Data" / "Raw" / "ExtractedAgreements_Bucketed" / "filtered_batch_results.csv"
+    direct_loans_csv = script_dir / ".." / "Data" / "Intermediate" / "3e_DirectLoans_FromNC.csv"
     output_csv = script_dir / ".." / "Data" / "Intermediate" / "5c_PanelAllLoans.csv"
 
     # Check inputs
-    for p in [firm_financials_csv, loan_terms_csv, filtered_csv]:
+    for p in [firm_financials_csv, loan_terms_csv, direct_loans_csv]:
         if not p.exists():
             print(f"Error: Missing input file: {p}")
             return
@@ -111,9 +111,9 @@ def main():
     df_terms = pd.read_csv(loan_terms_csv)
     print(f"  loan terms rows: {len(df_terms)}; columns: {len(df_terms.columns)}")
 
-    print("Loading filtered nonbank results...")
-    df_filtered = pd.read_csv(filtered_csv)
-    print(f"  filtered results rows: {len(df_filtered)}; columns: {len(df_filtered.columns)}")
+    print("Loading direct loans from .nc files...")
+    df_direct_loans = pd.read_csv(direct_loans_csv)
+    print(f"  direct loans rows: {len(df_direct_loans)}; columns: {len(df_direct_loans.columns)}")
 
     # Validate join keys
     if "accession" not in df_terms.columns:
@@ -132,20 +132,22 @@ def main():
     df_all["loan_id"] = range(1, len(df_all) + 1)
     print(f"  added loan_id column (1 to {len(df_all)})")
 
-    # Step 2: Left join to filtered results by accession, create indicator
-    print("Left joining filtered results to add nonbank indicator...")
-    keep_cols = ["accession", "lender_type"]
-    present_cols = [c for c in keep_cols if c in df_filtered.columns]
-    df_filtered_small = df_filtered[present_cols].drop_duplicates()
+    # Step 2: Left join to direct loans from .nc files by accession
+    print("Left joining direct loans from .nc files to add direct_from_text indicator...")
+    keep_cols = ["accession", "direct_from_text", "sec_url"]
+    present_cols = [c for c in keep_cols if c in df_direct_loans.columns]
+    df_direct_loans_small = df_direct_loans[present_cols].drop_duplicates()
 
-    df_panel = df_all.merge(df_filtered_small, on="accession", how="left")
-    df_panel["nonbank_lender"] = np.where(df_panel["lender_type"].notna(), 1, 0)
+    df_panel = df_all.merge(df_direct_loans_small, on="accession", how="left")
+    
+    # Note: nonbank_lender indicator is not available from 3e_DirectLoans_FromNC.csv
+    # It only contains direct_from_text from the .nc file analysis
 
     # Step 3: Winsorize continuous variables used in matching
     df_panel = winsorize_continuous_variables(df_panel, limits=(0.01, 0.01))
 
     # Optional: sort for readability
-    sort_cols = [c for c in ["nonbank_lender", "lender_type", "accession"] if c in df_panel.columns]
+    sort_cols = [c for c in ["direct_from_text", "accession"] if c in df_panel.columns]
     if sort_cols:
         df_panel = df_panel.sort_values(sort_cols).reset_index(drop=True)
 
@@ -156,12 +158,12 @@ def main():
 
     # Report
     total = len(df_panel)
-    nonbank = int(df_panel["nonbank_lender"].sum())
-    bank = total - nonbank
+    direct = int(df_panel["direct_from_text"].fillna(0).sum()) if "direct_from_text" in df_panel.columns else 0
     print("\nPanel Summary:")
     print(f"  total rows: {total}")
-    print(f"  nonbank_lender=1: {nonbank}")
-    print(f"  nonbank_lender=0: {bank}")
+    if "direct_from_text" in df_panel.columns:
+        print(f"  direct_from_text=1: {direct}")
+        print(f"  direct_from_text=0: {total - direct}")
 
     print("\nColumns (first 30 shown):")
     for i, col in enumerate(df_panel.columns[:30], 1):

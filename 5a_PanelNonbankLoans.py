@@ -29,7 +29,7 @@ def main():
     
     # Set up paths
     script_dir = Path(__file__).parent
-    filtered_csv = script_dir / ".." / "Data" / "Raw" / "ExtractedAgreements_Bucketed" / "filtered_batch_results.csv"
+    filtered_csv = script_dir / ".." / "Data" / "Raw" / "ExtractedAgreements_Bucketed" / "filtered_batch_results_manual_check.csv"
     loan_terms_csv = script_dir / ".." / "Data" / "Intermediate" / "loan_terms_cleaned_all_20251007.csv"
     firm_financials_csv = script_dir / ".." / "Data" / "Cleaned" / "agreements_comp_crsp_merged.csv"
     output_csv = script_dir / ".." / "Data" / "Intermediate" / "5a_PanelNonbankLoans.csv"

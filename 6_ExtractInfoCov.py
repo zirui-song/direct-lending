@@ -2,7 +2,7 @@
 """
 6_ExtractInfoCov.py
 
-Extract information covenants from .nc files in ExtractedAgreements_FinalMapped folder.
+Extract information covenants from .nc files in ExtractedAgreements folder.
 
 This script extracts three types of information covenants:
 1. Monthly financial statement requirements
@@ -10,7 +10,7 @@ This script extracts three types of information covenants:
 3. Lender meeting requirements
 
 Inputs:
-- ../Data/Raw/ExtractedAgreements_FinalMapped/*.nc files
+- ../Data/Raw/ExtractedAgreements/*.nc files
 
 Outputs:
 - ../Data/Intermediate/6_InformationCovenants.csv
@@ -233,7 +233,7 @@ def main():
 
     # Set up paths
     script_dir = Path(__file__).parent
-    input_dir = script_dir / ".." / "Data" / "Raw" / "ExtractedAgreements_FinalMapped"
+    input_dir = script_dir / ".." / "Data" / "Raw" / "ExtractedAgreements"
     output_file = script_dir / ".." / "Data" / "Intermediate" / "6_InformationCovenants.csv"
 
     # Check if input directory exists

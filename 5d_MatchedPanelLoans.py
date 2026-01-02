@@ -87,7 +87,7 @@ def get_fama_french_12_industry(sic_code):
 
 
 def compute_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute matching features: ff12, term_loan indicator, clean spread, log assets, leverage."""
+    """Compute matching features: ff12, term_loan indicator, clean spread, lagged log assets, lagged leverage, lagged ebitda."""
     out = df.copy()
 
     # Industry
@@ -102,7 +102,7 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     else:
         out['term_loan'] = 0
 
-    # Clean spread
+    # Clean spread (current period)
     if 'clean_interest_spread' in out.columns:
         out['spread'] = pd.to_numeric(out['clean_interest_spread'], errors='coerce')
     elif 'interest_spread' in out.columns:
@@ -110,25 +110,35 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     else:
         out['spread'] = np.nan
 
-    # Assets
-    at = pd.to_numeric(out.get('at', np.nan), errors='coerce')
-    out['log_at'] = np.log(at.replace({0: np.nan}))
-
-    # Leverage: (dltt + dlc)/at as primary; fallback lt/at
-    dltt = pd.to_numeric(out.get('dltt', np.nan), errors='coerce')
-    dlc = pd.to_numeric(out.get('dlc', np.nan), errors='coerce')
-    lt = pd.to_numeric(out.get('lt', np.nan), errors='coerce')
-
-    lev1 = (dltt.fillna(0) + dlc.fillna(0)) / at
-    lev2 = lt / at
-    out['leverage'] = lev1
-    out.loc[out['leverage'].isna(), 'leverage'] = lev2
-
-    # EBITDA
-    if 'ebitda' in out.columns:
-        out['ebitda_val'] = pd.to_numeric(out['ebitda'], errors='coerce')
+    # Use lagged log assets if available, otherwise compute from current at
+    if 'log_at_lag1' in out.columns:
+        out['log_at'] = pd.to_numeric(out['log_at_lag1'], errors='coerce')
     else:
-        out['ebitda_val'] = np.nan
+        at = pd.to_numeric(out.get('at', np.nan), errors='coerce')
+        out['log_at'] = np.log(at.replace({0: np.nan}))
+
+    # Use lagged leverage if available, otherwise compute from current values
+    if 'leverage_lag1' in out.columns:
+        out['leverage'] = pd.to_numeric(out['leverage_lag1'], errors='coerce')
+    else:
+        at = pd.to_numeric(out.get('at', np.nan), errors='coerce')
+        dltt = pd.to_numeric(out.get('dltt', np.nan), errors='coerce')
+        dlc = pd.to_numeric(out.get('dlc', np.nan), errors='coerce')
+        lt = pd.to_numeric(out.get('lt', np.nan), errors='coerce')
+        
+        lev1 = (dltt.fillna(0) + dlc.fillna(0)) / at
+        lev2 = lt / at
+        out['leverage'] = lev1
+        out.loc[out['leverage'].isna(), 'leverage'] = lev2
+
+    # Use lagged EBITDA if available, otherwise use current value
+    if 'ebitda_lag1' in out.columns:
+        out['ebitda_val'] = pd.to_numeric(out['ebitda_lag1'], errors='coerce')
+    else:
+        if 'ebitda' in out.columns:
+            out['ebitda_val'] = pd.to_numeric(out['ebitda'], errors='coerce')
+        else:
+            out['ebitda_val'] = np.nan
 
     return out
 
@@ -232,7 +242,7 @@ def propensity_score_matching(df_nonbank: pd.DataFrame, df_bank: pd.DataFrame,
         best_match_idx = within_caliper['ps_diff'].idxmin()
         best_match = df_bank.loc[best_match_idx]
         
-        # Record the match
+        # Record the match (using lag1 variables for matching covariates)
         matched_pairs.append({
             'ff12': nb_row.get('ff12'),
             'term_loan': nb_row.get('term_loan'),
@@ -243,16 +253,24 @@ def propensity_score_matching(df_nonbank: pd.DataFrame, df_bank: pd.DataFrame,
             'accession_bank': best_match.get('accession'),
             'gvkey_nonbank': nb_row.get('gvkey'),
             'gvkey_bank': best_match.get('gvkey'),
+            'year_nonbank': nb_row.get('year') if pd.notna(nb_row.get('year')) else np.nan,
+            'year_bank': best_match.get('year') if pd.notna(best_match.get('year')) else np.nan,
             'propensity_score_nonbank': float(nb_ps),
             'propensity_score_bank': float(best_match['propensity_score']),
             'spread_nonbank': float(nb_row.get('spread')) if pd.notna(nb_row.get('spread')) else np.nan,
             'spread_bank': float(best_match.get('spread')) if pd.notna(best_match.get('spread')) else np.nan,
-            'log_at_nonbank': float(nb_row.get('log_at')) if pd.notna(nb_row.get('log_at')) else np.nan,
-            'log_at_bank': float(best_match.get('log_at')) if pd.notna(best_match.get('log_at')) else np.nan,
-            'leverage_nonbank': float(nb_row.get('leverage')) if pd.notna(nb_row.get('leverage')) else np.nan,
-            'leverage_bank': float(best_match.get('leverage')) if pd.notna(best_match.get('leverage')) else np.nan,
-            'ebitda_nonbank': float(nb_row.get('ebitda_val')) if pd.notna(nb_row.get('ebitda_val')) else np.nan,
-            'ebitda_bank': float(best_match.get('ebitda_val')) if pd.notna(best_match.get('ebitda_val')) else np.nan,
+            # Loan characteristics
+            'maturity_months_nonbank': float(nb_row.get('maturity_months')) if pd.notna(nb_row.get('maturity_months')) else np.nan,
+            'maturity_months_bank': float(best_match.get('maturity_months')) if pd.notna(best_match.get('maturity_months')) else np.nan,
+            'facility_amount_nonbank': float(nb_row.get('facility_amount')) if pd.notna(nb_row.get('facility_amount')) else np.nan,
+            'facility_amount_bank': float(best_match.get('facility_amount')) if pd.notna(best_match.get('facility_amount')) else np.nan,
+            # Lag1 variables (used for matching)
+            'log_at_lag1_nonbank': float(nb_row.get('log_at')) if pd.notna(nb_row.get('log_at')) else np.nan,
+            'log_at_lag1_bank': float(best_match.get('log_at')) if pd.notna(best_match.get('log_at')) else np.nan,
+            'leverage_lag1_nonbank': float(nb_row.get('leverage')) if pd.notna(nb_row.get('leverage')) else np.nan,
+            'leverage_lag1_bank': float(best_match.get('leverage')) if pd.notna(best_match.get('leverage')) else np.nan,
+            'ebitda_lag1_nonbank': float(nb_row.get('ebitda_val')) if pd.notna(nb_row.get('ebitda_val')) else np.nan,
+            'ebitda_lag1_bank': float(best_match.get('ebitda_val')) if pd.notna(best_match.get('ebitda_val')) else np.nan,
         })
         
         used_bank_indices.add(best_match_idx)

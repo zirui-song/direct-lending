@@ -19,8 +19,8 @@ print(f"Working directory is set to: {script_dir}")
 db = wrds.Connection(wrds_username='zrsong')
 
 # Define the start and end dates
-start_date = '2010-01-01'
-end_date = '2024-06-30'
+start_date = '1994-01-01'
+end_date = '2025-12-31'
 
 # overleaf_dir = "/Users/zrsong/MIT Dropbox/Zirui Song/Apps/Overleaf/Contract Innovations"
 
@@ -130,6 +130,49 @@ compa['z_score'] = (3.3 * compa['pi'] + 1.0 * compa['sale'] + 1.4 * compa['re'] 
 # Delta_DCF
 compa['delta_dcf'] = compa['dltis'] - compa['dltr']
 
+# Calculate log_at (current period)
+print("\nCalculating log(assets)...")
+compa['log_at'] = np.log(compa['at'].replace({0: np.nan}))
+print(f"Calculated log_at for {compa['log_at'].notna().sum()} observations")
+
+# Generate previous-year (lag-1) variables for the main Compustat fields
+print("\nGenerating lag-1 variables...")
+main_vars_for_lag = [
+    'at','capx','ceq','cogs','csho','dlc','dlcch','dltt','dp','ib','itcb','lt','mib','naicsh','ni',
+    'prstkcc','pstk','pstkl','pstkrv','re','revt','sale','ebitda','dpc','oiadp','oibdp','seq','txdb','txdi',
+    'txditc','wcapch','xint','xlr','xrd','xsga','ppegt','ebit','aqc','act','che','dltis','dltr','dvc','idit',
+    'intan','lct','dclo','oancf','pi','pifo','ppent','prcc_f','tlcf','txfo','txdba','txdbca','txndb','debt',
+    'net_interest', 'log_at'  # Add log_at to the list
+]
+lag_cols = [c for c in main_vars_for_lag if c in compa.columns]
+# Ensure proper sorting before lag
+compa = compa.sort_values(['gvkey', 'fyear'])
+compa[[f"{c}_lag1" for c in lag_cols]] = compa.groupby('gvkey')[lag_cols].shift(1)
+
+# Create lagged financial ratios using lag-1 components
+print("Creating lagged financial ratios...")
+# Leverage (debt/assets)
+compa['leverage_lag1'] = compa['debt_lag1'] / compa['at_lag1']
+
+# Market-to-book: (debt + preferred stock + market equity) / assets, all at lag-1
+compa['market_to_book_lag1'] = (
+    compa['debt_lag1'] + compa['pstk_lag1'] + (compa['prcc_f_lag1'] * compa['csho_lag1'])
+) / compa['at_lag1']
+
+# Tangibility (ppent/assets)
+compa['tangibility_lag1'] = compa['ppent_lag1'] / compa['at_lag1']
+
+# Profitability (oibdp/assets)
+compa['profitability_lag1'] = compa['oibdp_lag1'] / compa['at_lag1']
+
+# Clean infinities from division by zero
+for _col in ['leverage_lag1', 'market_to_book_lag1', 'tangibility_lag1', 'profitability_lag1']:
+    if _col in compa.columns:
+        compa[_col] = compa[_col].replace([np.inf, -np.inf], np.nan)
+
+print(f"Generated {len(lag_cols)} lag-1 variables and 4 lagged financial ratios")
+print(f"  log_at_lag1 available for {compa['log_at_lag1'].notna().sum()} observations")
+
 # CRSP 
 
 # Define the variables to be imported
@@ -184,6 +227,12 @@ crspa = crspm.groupby(['permno', 'year']).agg({
     'ret_vol': 'first',
     'dlstcd': 'first'
 }).reset_index()
+
+# Generate previous-year (lag-1) versions of key CRSP variables per permno
+print("\nGenerating CRSP lag-1 variables...")
+crspa = crspa.sort_values(['permno', 'year'])
+crspa[['ret_buy_and_hold_lag1', 'ret_vol_lag1', 'dlstcd_lag1']] = crspa.groupby('permno')[['ret_buy_and_hold', 'ret_vol', 'dlstcd']].shift(1)
+print("Generated 3 CRSP lag-1 variables")
 
 # Compustat/CRSP Link Table
 ccm_query = """

@@ -123,15 +123,16 @@ def load_data(base_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def build_matched_frame(matched: pd.DataFrame, panel: pd.DataFrame) -> pd.DataFrame:
-    # Select covariates of interest from panel
+    # Select covariates of interest from panel (including lagged variables)
     want_cols = [
         "loan_id", "accession", "clean_interest_spread", "maturity_months", "facility_amount",
-        "at", "dltt", "dlc", "lt", "ebitda", "market_to_book", "gvkey", "year"
+        "at", "dltt", "dlc", "lt", "ebitda", "market_to_book", "gvkey", "year",
+        "log_at_lag1", "leverage_lag1", "ebitda_lag1"  # Add lagged variables
     ]
     have_cols = [c for c in want_cols if c in panel.columns]
     df_cov = panel[have_cols].copy()
 
-    # Compute size and leverage
+    # Compute current period size and leverage
     df_cov["log_at"] = np.log(pd.to_numeric(df_cov.get("at"), errors="coerce").replace({0: np.nan}))
     dltt = pd.to_numeric(df_cov.get("dltt"), errors="coerce") if "dltt" in df_cov.columns else np.nan
     dlc = pd.to_numeric(df_cov.get("dlc"), errors="coerce") if "dlc" in df_cov.columns else np.nan
@@ -156,9 +157,10 @@ def build_matched_frame(matched: pd.DataFrame, panel: pd.DataFrame) -> pd.DataFr
     bank["group"] = "Bank"
     bank["gvkey"] = bank["gvkey_bank"]  # Use the gvkey from matched data
 
-    # Harmonize columns
+    # Harmonize columns (include lagged variables)
     keep = ["group", "loan_id", "accession", "gvkey", "term_loan", "ff12", "clean_interest_spread", 
-            "maturity_months", "facility_amount", "log_at", "leverage", "ebitda", "market_to_book", "year"]
+            "maturity_months", "facility_amount", "log_at", "leverage", "ebitda", "market_to_book", "year",
+            "log_at_lag1", "leverage_lag1", "ebitda_lag1"]
     have_keep = [c for c in keep if c in nonbank.columns]
     df_nb = nonbank[have_keep].rename(columns={"loan_id": "loan_id_used"})
     have_keep = [c for c in keep if c in bank.columns]
@@ -169,9 +171,11 @@ def build_matched_frame(matched: pd.DataFrame, panel: pd.DataFrame) -> pd.DataFr
 
 
 def create_histograms(df: pd.DataFrame, fig_dir: Path) -> None:
-    # Variable groups
+    # Variable groups (current period)
     covariates = [c for c in ["log_at", "leverage", "ebitda", "market_to_book"] if c in df.columns]
     loan_terms = [c for c in ["clean_interest_spread", "maturity_months", "facility_amount"] if c in df.columns]
+    # Lagged variables (used for matching)
+    lagged_covariates = [c for c in ["log_at_lag1", "leverage_lag1", "ebitda_lag1"] if c in df.columns]
 
     # Helper to draw grouped hist
     def plot_grouped(vars_list, title, out_name, log_flags=None):
@@ -233,9 +237,14 @@ def create_histograms(df: pd.DataFrame, fig_dir: Path) -> None:
 
     # Overall histograms
     if covariates:
-        plot_grouped(covariates, "Borrower Covariates: Nonbank vs Bank", "5e_Hist_BorrowerCovariates_Nonbank_vs_Bank.png")
+        plot_grouped(covariates, "Borrower Covariates (Current): Nonbank vs Bank", "5e_Hist_BorrowerCovariates_Nonbank_vs_Bank.png")
         for v in covariates:
-            plot_grouped([v], f"{v}: Nonbank vs Bank", f"5e_Hist_{v}_Nonbank_vs_Bank.png")
+            plot_grouped([v], f"{v} (Current): Nonbank vs Bank", f"5e_Hist_{v}_Nonbank_vs_Bank.png")
+
+    if lagged_covariates:
+        plot_grouped(lagged_covariates, "Borrower Covariates (Lagged, Used for Matching): Nonbank vs Bank", "5e_Hist_BorrowerCovariates_Lagged_Nonbank_vs_Bank.png")
+        for v in lagged_covariates:
+            plot_grouped([v], f"{v} (Used for Matching): Nonbank vs Bank", f"5e_Hist_{v}_Nonbank_vs_Bank.png")
 
     if loan_terms:
         plot_grouped(loan_terms, "Loan Terms: Nonbank vs Bank", "5e_Hist_LoanTerms_Nonbank_vs_Bank.png")
@@ -244,7 +253,9 @@ def create_histograms(df: pd.DataFrame, fig_dir: Path) -> None:
 
     # Histograms by term loan type
     if covariates:
-        plot_by_term_loan_type(covariates, "Borrower Covariates", "5e_Hist_BorrowerCovariates_ByTermLoanType")
+        plot_by_term_loan_type(covariates, "Borrower Covariates (Current)", "5e_Hist_BorrowerCovariates_ByTermLoanType")
+    if lagged_covariates:
+        plot_by_term_loan_type(lagged_covariates, "Borrower Covariates (Lagged)", "5e_Hist_BorrowerCovariates_Lagged_ByTermLoanType")
     if loan_terms:
         plot_by_term_loan_type(loan_terms, "Loan Terms", "5e_Hist_LoanTerms_ByTermLoanType")
 
@@ -275,8 +286,20 @@ def print_matching_summary(df: pd.DataFrame) -> None:
         ind_summary = df.groupby(["group", "ff12"]).size().unstack(fill_value=0)
         print(ind_summary)
     
-    # Matching quality - compare means
-    print(f"\nMatching Quality (means):")
+    # Matching quality - compare means for lagged variables (used in matching)
+    print(f"\nMatching Quality - Lagged Variables (used for matching):")
+    lagged_vars = ["log_at_lag1", "leverage_lag1", "ebitda_lag1"]
+    available_lagged = [v for v in lagged_vars if v in df.columns]
+    
+    for var in available_lagged:
+        nonbank_mean = df[df["group"] == "Nonbank"][var].mean()
+        bank_mean = df[df["group"] == "Bank"][var].mean()
+        diff = nonbank_mean - bank_mean
+        pct_diff = (diff / bank_mean * 100) if bank_mean != 0 else 0
+        print(f"{var:20s}: Nonbank={nonbank_mean:8.2f}, Bank={bank_mean:8.2f}, Diff={diff:8.2f} ({pct_diff:+.1f}%)")
+    
+    # Current period variables
+    print(f"\nCurrent Period Variables:")
     numeric_vars = ["clean_interest_spread", "log_at", "leverage", "ebitda", "maturity_months", "facility_amount"]
     available_vars = [v for v in numeric_vars if v in df.columns]
     
@@ -284,7 +307,8 @@ def print_matching_summary(df: pd.DataFrame) -> None:
         nonbank_mean = df[df["group"] == "Nonbank"][var].mean()
         bank_mean = df[df["group"] == "Bank"][var].mean()
         diff = nonbank_mean - bank_mean
-        print(f"{var:20s}: Nonbank={nonbank_mean:8.2f}, Bank={bank_mean:8.2f}, Diff={diff:8.2f}")
+        pct_diff = (diff / bank_mean * 100) if bank_mean != 0 else 0
+        print(f"{var:20s}: Nonbank={nonbank_mean:8.2f}, Bank={bank_mean:8.2f}, Diff={diff:8.2f} ({pct_diff:+.1f}%)")
 
 
 def main():

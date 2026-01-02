@@ -163,6 +163,12 @@ def create_accession_level_dataset(df):
     if 'year' in df.columns:
         agg_dict['year'] = 'first'
     
+    # Always include year in the aggregation
+    if 'year' not in df.columns and 'deal_active_date' in df.columns:
+        # Extract year from deal_active_date if year column doesn't exist
+        df['year'] = pd.to_datetime(df['deal_active_date'], errors='coerce').dt.year
+        agg_dict['year'] = 'first'
+    
     # Filter agg_dict to only include columns that exist in df
     existing_cols = {col: func for col, func in agg_dict.items() if col in df.columns}
     

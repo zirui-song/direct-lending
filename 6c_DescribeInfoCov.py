@@ -2,21 +2,18 @@
 """
 6c_DescribeInfoCov.py
 
-Analyze and visualize time series of information covenant usage by lender type.
+Analyze and visualize information covenant usage for direct vs non-direct loans.
 
-Creates time series plots showing:
-1. Information covenant usage over time by bank vs nonbank lenders
-2. Information covenant usage over time by nonbank lender types
-3. Detailed breakdown of covenant types by lender category
+Creates plots showing:
+1. Information covenant usage over time by direct vs non-direct loans
+2. Detailed breakdown of covenant types and loan characteristics for direct bank vs non-direct bank loans
 
 Inputs:
 - ../Data/Intermediate/6b_PanelWithInfoCovenants.csv
 
 Outputs:
-- ../Results/Figures/6c_InfoCovenants_TimeSeries_Bank_vs_Nonbank.png
-- ../Results/Figures/6c_InfoCovenants_TimeSeries_NonbankTypes.png
-- ../Results/Figures/6c_InfoCovenants_Detailed_Bank_vs_Nonbank.png
-- ../Results/Figures/6c_InfoCovenants_Detailed_NonbankTypes.png
+- ../Results/Figures/6c_InfoCovenants_TimeSeries_Direct_vs_NonDirect.png
+- ../Results/Figures/6c_InfoCovenants_Detailed_DirectBank_vs_NonDirectBank.png
 
 Author: Zirui Song
 Date: Oct 2025
@@ -65,22 +62,30 @@ def extract_year_from_date(date_col, df):
     return date_series.apply(extract_year)
 
 
-def create_time_series_bank_vs_nonbank(df, fig_dir):
-    """Create time series plots comparing bank vs nonbank covenant usage."""
+def create_time_series_direct_vs_nondirect(df, fig_dir):
+    """Create time series plots comparing direct vs non-direct covenant usage."""
+    
+    # Check if direct_from_text column exists
+    if 'direct_from_text' not in df.columns:
+        print("Warning: direct_from_text column not found. Skipping direct vs non-direct analysis.")
+        return
+    
+    # Create direct indicator (1 if direct, 0 otherwise)
+    df['direct'] = df['direct_from_text'].fillna(0).astype(int)
     
     # Calculate annual covenant usage rates
-    bank_data = df[df['nonbank_lender'] == 0].copy()
-    nonbank_data = df[df['nonbank_lender'] == 1].copy()
+    direct_data = df[df['direct'] == 1].copy()
+    nondirect_data = df[df['direct'] == 0].copy()
     
     # Group by year and calculate rates
-    bank_yearly = bank_data.groupby('year').agg({
+    direct_yearly = direct_data.groupby('year').agg({
         'monthly_fs': 'mean',
         'projected_fs': 'mean', 
         'lender_meeting': 'mean',
         'total_info_covenants': ['mean', 'count']
     }).reset_index()
     
-    nonbank_yearly = nonbank_data.groupby('year').agg({
+    nondirect_yearly = nondirect_data.groupby('year').agg({
         'monthly_fs': 'mean',
         'projected_fs': 'mean',
         'lender_meeting': 'mean', 
@@ -88,12 +93,12 @@ def create_time_series_bank_vs_nonbank(df, fig_dir):
     }).reset_index()
     
     # Flatten column names
-    bank_yearly.columns = ['year', 'monthly_fs_rate', 'projected_fs_rate', 'meeting_rate', 'avg_covenants', 'count']
-    nonbank_yearly.columns = ['year', 'monthly_fs_rate', 'projected_fs_rate', 'meeting_rate', 'avg_covenants', 'count']
+    direct_yearly.columns = ['year', 'monthly_fs_rate', 'projected_fs_rate', 'meeting_rate', 'avg_covenants', 'count']
+    nondirect_yearly.columns = ['year', 'monthly_fs_rate', 'projected_fs_rate', 'meeting_rate', 'avg_covenants', 'count']
     
     # Filter years with sufficient data (at least 10 observations)
-    bank_yearly = bank_yearly[bank_yearly['count'] >= 10]
-    nonbank_yearly = nonbank_yearly[nonbank_yearly['count'] >= 10]
+    direct_yearly = direct_yearly[direct_yearly['count'] >= 10]
+    nondirect_yearly = nondirect_yearly[nondirect_yearly['count'] >= 10]
     
     # Create subplot
     fig = make_subplots(
@@ -105,54 +110,54 @@ def create_time_series_bank_vs_nonbank(df, fig_dir):
     
     # Plot 1: Monthly FS
     fig.add_trace(
-        go.Scatter(x=bank_yearly['year'], y=bank_yearly['monthly_fs_rate'], 
-                  name='Bank', line=dict(color='blue'), mode='lines+markers'),
+        go.Scatter(x=direct_yearly['year'], y=direct_yearly['monthly_fs_rate'], 
+                  name='Direct', line=dict(color='green'), mode='lines+markers'),
         row=1, col=1
     )
     fig.add_trace(
-        go.Scatter(x=nonbank_yearly['year'], y=nonbank_yearly['monthly_fs_rate'],
-                  name='Nonbank', line=dict(color='red'), mode='lines+markers'),
+        go.Scatter(x=nondirect_yearly['year'], y=nondirect_yearly['monthly_fs_rate'],
+                  name='Non-Direct', line=dict(color='orange'), mode='lines+markers'),
         row=1, col=1
     )
     
     # Plot 2: Projected FS
     fig.add_trace(
-        go.Scatter(x=bank_yearly['year'], y=bank_yearly['projected_fs_rate'],
-                  name='Bank', line=dict(color='blue'), mode='lines+markers', showlegend=False),
+        go.Scatter(x=direct_yearly['year'], y=direct_yearly['projected_fs_rate'],
+                  name='Direct', line=dict(color='green'), mode='lines+markers', showlegend=False),
         row=1, col=2
     )
     fig.add_trace(
-        go.Scatter(x=nonbank_yearly['year'], y=nonbank_yearly['projected_fs_rate'],
-                  name='Nonbank', line=dict(color='red'), mode='lines+markers', showlegend=False),
+        go.Scatter(x=nondirect_yearly['year'], y=nondirect_yearly['projected_fs_rate'],
+                  name='Non-Direct', line=dict(color='orange'), mode='lines+markers', showlegend=False),
         row=1, col=2
     )
     
     # Plot 3: Lender Meetings
     fig.add_trace(
-        go.Scatter(x=bank_yearly['year'], y=bank_yearly['meeting_rate'],
-                  name='Bank', line=dict(color='blue'), mode='lines+markers', showlegend=False),
+        go.Scatter(x=direct_yearly['year'], y=direct_yearly['meeting_rate'],
+                  name='Direct', line=dict(color='green'), mode='lines+markers', showlegend=False),
         row=2, col=1
     )
     fig.add_trace(
-        go.Scatter(x=nonbank_yearly['year'], y=nonbank_yearly['meeting_rate'],
-                  name='Nonbank', line=dict(color='red'), mode='lines+markers', showlegend=False),
+        go.Scatter(x=nondirect_yearly['year'], y=nondirect_yearly['meeting_rate'],
+                  name='Non-Direct', line=dict(color='orange'), mode='lines+markers', showlegend=False),
         row=2, col=1
     )
     
     # Plot 4: Average Total Covenants
     fig.add_trace(
-        go.Scatter(x=bank_yearly['year'], y=bank_yearly['avg_covenants'],
-                  name='Bank', line=dict(color='blue'), mode='lines+markers', showlegend=False),
+        go.Scatter(x=direct_yearly['year'], y=direct_yearly['avg_covenants'],
+                  name='Direct', line=dict(color='green'), mode='lines+markers', showlegend=False),
         row=2, col=2
     )
     fig.add_trace(
-        go.Scatter(x=nonbank_yearly['year'], y=nonbank_yearly['avg_covenants'],
-                  name='Nonbank', line=dict(color='red'), mode='lines+markers', showlegend=False),
+        go.Scatter(x=nondirect_yearly['year'], y=nondirect_yearly['avg_covenants'],
+                  name='Non-Direct', line=dict(color='orange'), mode='lines+markers', showlegend=False),
         row=2, col=2
     )
     
     fig.update_layout(
-        title='Information Covenant Usage Over Time: Bank vs Nonbank Lenders',
+        title='Information Covenant Usage Over Time: Direct vs Non-Direct Loans',
         height=800,
         title_x=0.5
     )
@@ -167,169 +172,86 @@ def create_time_series_bank_vs_nonbank(df, fig_dir):
     fig.update_xaxes(title_text="Year", row=2, col=2)
     
     # Save plot
-    pio.write_image(fig, str(fig_dir / "6c_InfoCovenants_TimeSeries_Bank_vs_Nonbank.png"), 
+    pio.write_image(fig, str(fig_dir / "6c_InfoCovenants_TimeSeries_Direct_vs_NonDirect.png"), 
                    width=1200, height=800, scale=2)
 
 
-def create_time_series_nonbank_types(df, fig_dir):
-    """Create time series plots for different nonbank lender types."""
+def create_detailed_comparison_direct_bank_vs_nondirect_bank(df, fig_dir):
+    """Create detailed comparison plots for direct bank vs non-direct bank loans."""
     
-    # Get nonbank data only
-    nonbank_data = df[df['nonbank_lender'] == 1].copy()
-    
-    if 'lender_type' not in nonbank_data.columns:
-        print("Warning: lender_type column not found. Cannot create nonbank types analysis.")
+    # Check if required columns exist
+    if 'direct_from_text' not in df.columns or 'nonbank_lender' not in df.columns:
+        print("Warning: Required columns (direct_from_text or nonbank_lender) not found. Skipping direct bank vs non-direct bank analysis.")
         return
     
-    # Get top nonbank lender types by count
-    lender_counts = nonbank_data['lender_type'].value_counts()
-    top_lender_types = lender_counts.head(6).index.tolist()  # Top 6 for readability
+    # Create direct indicator
+    df['direct'] = df['direct_from_text'].fillna(0).astype(int)
     
-    print(f"Top nonbank lender types: {top_lender_types}")
-    print(f"Lender type counts: {lender_counts.head(6).to_dict()}")
+    # Filter to bank loans only
+    bank_data = df[df['nonbank_lender'] == 0].copy()
     
-    # Filter to top lender types
-    nonbank_filtered = nonbank_data[nonbank_data['lender_type'].isin(top_lender_types)]
+    if len(bank_data) == 0:
+        print("Warning: No bank loans found. Skipping direct bank vs non-direct bank analysis.")
+        return
     
-    # Create subplot
-    fig = make_subplots(
-        rows=2, cols=2,
-        subplot_titles=('Monthly FS Requirements', 'Projected FS Requirements',
-                       'Lender Meeting Requirements', 'Average Total Covenants'),
-        vertical_spacing=0.12
-    )
+    # Split into direct bank and non-direct bank
+    direct_bank_data = bank_data[bank_data['direct'] == 1].copy()
+    nondirect_bank_data = bank_data[bank_data['direct'] == 0].copy()
     
-    colors = ['red', 'orange', 'green', 'purple', 'brown', 'pink']
-    
-    for i, lender_type in enumerate(top_lender_types):
-        lender_data = nonbank_filtered[nonbank_filtered['lender_type'] == lender_type]
-        
-        # Group by year
-        yearly_data = lender_data.groupby('year').agg({
-            'monthly_fs': 'mean',
-            'projected_fs': 'mean',
-            'lender_meeting': 'mean',
-            'total_info_covenants': ['mean', 'count']
-        }).reset_index()
-        
-        # Flatten column names
-        yearly_data.columns = ['year', 'monthly_fs_rate', 'projected_fs_rate', 'meeting_rate', 'avg_covenants', 'count']
-        
-        # Filter years with sufficient data
-        yearly_data = yearly_data[yearly_data['count'] >= 5]
-        
-        if len(yearly_data) > 0:
-            color = colors[i % len(colors)]
-            show_legend = True  # Show legend for all traces
-            
-            # Plot 1: Monthly FS
-            fig.add_trace(
-                go.Scatter(x=yearly_data['year'], y=yearly_data['monthly_fs_rate'],
-                          name=lender_type, line=dict(color=color), mode='lines+markers', showlegend=show_legend),
-                row=1, col=1
-            )
-            
-            # Plot 2: Projected FS
-            fig.add_trace(
-                go.Scatter(x=yearly_data['year'], y=yearly_data['projected_fs_rate'],
-                          name=lender_type, line=dict(color=color), mode='lines+markers', showlegend=False),
-                row=1, col=2
-            )
-            
-            # Plot 3: Lender Meetings
-            fig.add_trace(
-                go.Scatter(x=yearly_data['year'], y=yearly_data['meeting_rate'],
-                          name=lender_type, line=dict(color=color), mode='lines+markers', showlegend=False),
-                row=2, col=1
-            )
-            
-            # Plot 4: Average Total Covenants
-            fig.add_trace(
-                go.Scatter(x=yearly_data['year'], y=yearly_data['avg_covenants'],
-                          name=lender_type, line=dict(color=color), mode='lines+markers', showlegend=False),
-                row=2, col=2
-            )
-    
-    fig.update_layout(
-        title='Information Covenant Usage Over Time: Nonbank Lender Types',
-        height=800,
-        title_x=0.5,
-        legend=dict(
-            orientation="v",
-            yanchor="top",
-            y=1,
-            xanchor="left",
-            x=1.02
-        )
-    )
-    
-    # Update y-axis labels
-    fig.update_yaxes(title_text="Usage Rate", row=1, col=1)
-    fig.update_yaxes(title_text="Usage Rate", row=1, col=2)
-    fig.update_yaxes(title_text="Usage Rate", row=2, col=1)
-    fig.update_yaxes(title_text="Average Count", row=2, col=2)
-    
-    fig.update_xaxes(title_text="Year", row=2, col=1)
-    fig.update_xaxes(title_text="Year", row=2, col=2)
-    
-    # Save plot
-    pio.write_image(fig, str(fig_dir / "6c_InfoCovenants_TimeSeries_NonbankTypes.png"),
-                   width=1200, height=800, scale=2)
-
-
-def create_detailed_comparison_plots(df, fig_dir):
-    """Create detailed comparison plots using matplotlib/seaborn."""
+    if len(direct_bank_data) == 0 or len(nondirect_bank_data) == 0:
+        print(f"Warning: Insufficient data. Direct bank: {len(direct_bank_data)}, Non-direct bank: {len(nondirect_bank_data)}")
+        return
     
     # Set style
     plt.style.use('default')
     sns.set_palette("husl")
     
-    # Create figure with subplots
-    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-    fig.suptitle('Information Covenant Usage: Detailed Analysis', fontsize=16, y=0.98)
+    # Create figure with subplots (4 rows x 2 cols to include all loan characteristics)
+    fig, axes = plt.subplots(4, 2, figsize=(15, 22))
+    fig.suptitle('Information Covenant Usage & Loan Characteristics: Direct Bank vs Non-Direct Bank Loans', fontsize=16, y=0.995)
     
-    # 1. Covenant usage by lender type (bank vs nonbank)
+    # 1. Covenant usage by direct vs non-direct bank
     covenant_types = ['monthly_fs', 'projected_fs', 'lender_meeting']
     covenant_names = ['Monthly FS', 'Projected FS', 'Lender Meeting']
     
-    bank_rates = []
-    nonbank_rates = []
+    direct_bank_rates = []
+    nondirect_bank_rates = []
     
     for covenant in covenant_types:
-        bank_rate = df[df['nonbank_lender'] == 0][covenant].mean()
-        nonbank_rate = df[df['nonbank_lender'] == 1][covenant].mean()
-        bank_rates.append(bank_rate)
-        nonbank_rates.append(nonbank_rate)
+        direct_bank_rate = direct_bank_data[covenant].mean()
+        nondirect_bank_rate = nondirect_bank_data[covenant].mean()
+        direct_bank_rates.append(direct_bank_rate)
+        nondirect_bank_rates.append(nondirect_bank_rate)
     
     x = np.arange(len(covenant_names))
     width = 0.35
     
-    axes[0, 0].bar(x - width/2, bank_rates, width, label='Bank', alpha=0.8)
-    axes[0, 0].bar(x + width/2, nonbank_rates, width, label='Nonbank', alpha=0.8)
+    axes[0, 0].bar(x - width/2, direct_bank_rates, width, label='Direct Bank', alpha=0.8, color='green')
+    axes[0, 0].bar(x + width/2, nondirect_bank_rates, width, label='Non-Direct Bank', alpha=0.8, color='orange')
     axes[0, 0].set_xlabel('Covenant Type')
     axes[0, 0].set_ylabel('Usage Rate')
-    axes[0, 0].set_title('Covenant Usage: Bank vs Nonbank')
+    axes[0, 0].set_title('Covenant Usage: Direct Bank vs Non-Direct Bank')
     axes[0, 0].set_xticks(x)
     axes[0, 0].set_xticklabels(covenant_names, rotation=45)
     axes[0, 0].legend()
     axes[0, 0].grid(True, alpha=0.3)
     
     # 2. Covenant intensity distribution
-    bank_intensity = df[df['nonbank_lender'] == 0]['total_info_covenants'].value_counts().sort_index()
-    nonbank_intensity = df[df['nonbank_lender'] == 1]['total_info_covenants'].value_counts().sort_index()
+    direct_bank_intensity = direct_bank_data['total_info_covenants'].value_counts().sort_index()
+    nondirect_bank_intensity = nondirect_bank_data['total_info_covenants'].value_counts().sort_index()
     
     x_intensity = np.arange(4)
-    bank_counts = [bank_intensity.get(i, 0) for i in range(4)]
-    nonbank_counts = [nonbank_intensity.get(i, 0) for i in range(4)]
+    direct_bank_counts = [direct_bank_intensity.get(i, 0) for i in range(4)]
+    nondirect_bank_counts = [nondirect_bank_intensity.get(i, 0) for i in range(4)]
     
     # Normalize to percentages
-    bank_total = sum(bank_counts)
-    nonbank_total = sum(nonbank_counts)
-    bank_pct = [count/bank_total*100 for count in bank_counts]
-    nonbank_pct = [count/nonbank_total*100 for count in nonbank_counts]
+    direct_bank_total = sum(direct_bank_counts)
+    nondirect_bank_total = sum(nondirect_bank_counts)
+    direct_bank_pct = [count/direct_bank_total*100 if direct_bank_total > 0 else 0 for count in direct_bank_counts]
+    nondirect_bank_pct = [count/nondirect_bank_total*100 if nondirect_bank_total > 0 else 0 for count in nondirect_bank_counts]
     
-    axes[0, 1].bar(x_intensity - width/2, bank_pct, width, label='Bank', alpha=0.8)
-    axes[0, 1].bar(x_intensity + width/2, nonbank_pct, width, label='Nonbank', alpha=0.8)
+    axes[0, 1].bar(x_intensity - width/2, direct_bank_pct, width, label='Direct Bank', alpha=0.8, color='green')
+    axes[0, 1].bar(x_intensity + width/2, nondirect_bank_pct, width, label='Non-Direct Bank', alpha=0.8, color='orange')
     axes[0, 1].set_xlabel('Number of Covenant Types')
     axes[0, 1].set_ylabel('Percentage of Loans')
     axes[0, 1].set_title('Covenant Intensity Distribution')
@@ -338,44 +260,308 @@ def create_detailed_comparison_plots(df, fig_dir):
     axes[0, 1].legend()
     axes[0, 1].grid(True, alpha=0.3)
     
-    # 3. Nonbank lender types comparison (if available)
-    if 'lender_type' in df.columns:
-        nonbank_data = df[df['nonbank_lender'] == 1]
-        lender_counts = nonbank_data['lender_type'].value_counts().head(8)
+    # 3. Summary statistics table
+    summary_stats = {
+        'Direct Bank': {
+            'Count': len(direct_bank_data),
+            'Avg Covenants': direct_bank_data['total_info_covenants'].mean(),
+            'Monthly FS %': direct_bank_data['monthly_fs'].mean() * 100,
+            'Projected FS %': direct_bank_data['projected_fs'].mean() * 100,
+            'Meeting %': direct_bank_data['lender_meeting'].mean() * 100
+        },
+        'Non-Direct Bank': {
+            'Count': len(nondirect_bank_data),
+            'Avg Covenants': nondirect_bank_data['total_info_covenants'].mean(),
+            'Monthly FS %': nondirect_bank_data['monthly_fs'].mean() * 100,
+            'Projected FS %': nondirect_bank_data['projected_fs'].mean() * 100,
+            'Meeting %': nondirect_bank_data['lender_meeting'].mean() * 100
+        }
+    }
+    
+    # Create a text summary
+    summary_text = "Summary Statistics:\n\n"
+    summary_text += "Direct Bank Loans:\n"
+    summary_text += f"  Count: {summary_stats['Direct Bank']['Count']:,}\n"
+    summary_text += f"  Avg Covenants: {summary_stats['Direct Bank']['Avg Covenants']:.2f}\n"
+    summary_text += f"  Monthly FS: {summary_stats['Direct Bank']['Monthly FS %']:.1f}%\n"
+    summary_text += f"  Projected FS: {summary_stats['Direct Bank']['Projected FS %']:.1f}%\n"
+    summary_text += f"  Meeting: {summary_stats['Direct Bank']['Meeting %']:.1f}%\n\n"
+    summary_text += "Non-Direct Bank Loans:\n"
+    summary_text += f"  Count: {summary_stats['Non-Direct Bank']['Count']:,}\n"
+    summary_text += f"  Avg Covenants: {summary_stats['Non-Direct Bank']['Avg Covenants']:.2f}\n"
+    summary_text += f"  Monthly FS: {summary_stats['Non-Direct Bank']['Monthly FS %']:.1f}%\n"
+    summary_text += f"  Projected FS: {summary_stats['Non-Direct Bank']['Projected FS %']:.1f}%\n"
+    summary_text += f"  Meeting: {summary_stats['Non-Direct Bank']['Meeting %']:.1f}%"
+    
+    axes[1, 0].text(0.1, 0.5, summary_text, transform=axes[1, 0].transAxes,
+                    fontsize=11, verticalalignment='center', family='monospace',
+                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    axes[1, 0].set_xlim(0, 1)
+    axes[1, 0].set_ylim(0, 1)
+    axes[1, 0].axis('off')
+    axes[1, 0].set_title('Summary Statistics')
+    
+    # 4. Time trend of covenant usage
+    direct_bank_yearly = direct_bank_data.groupby('year')['total_info_covenants'].agg(['mean', 'count']).reset_index()
+    nondirect_bank_yearly = nondirect_bank_data.groupby('year')['total_info_covenants'].agg(['mean', 'count']).reset_index()
+    
+    # Filter years with sufficient data
+    direct_bank_yearly = direct_bank_yearly[direct_bank_yearly['count'] >= 5]
+    nondirect_bank_yearly = nondirect_bank_yearly[nondirect_bank_yearly['count'] >= 10]
+    
+    if len(direct_bank_yearly) > 0 and len(nondirect_bank_yearly) > 0:
+        ax_twin = axes[1, 1].twinx()
+        line1 = axes[1, 1].plot(direct_bank_yearly['year'], direct_bank_yearly['mean'], 'g-o', label='Direct Bank Avg', linewidth=2)
+        line2 = axes[1, 1].plot(nondirect_bank_yearly['year'], nondirect_bank_yearly['mean'], 'orange', marker='s', linestyle='-', label='Non-Direct Bank Avg', linewidth=2)
+        line3 = ax_twin.plot(direct_bank_yearly['year'], direct_bank_yearly['count'], 'g--', alpha=0.5, label='Direct Bank Count')
+        line4 = ax_twin.plot(nondirect_bank_yearly['year'], nondirect_bank_yearly['count'], 'orange', linestyle='--', alpha=0.5, label='Non-Direct Bank Count')
         
-        # Calculate average covenants per lender type
-        lender_avg_covenants = nonbank_data.groupby('lender_type')['total_info_covenants'].mean().sort_values(ascending=False)
+        axes[1, 1].set_xlabel('Year')
+        axes[1, 1].set_ylabel('Average Covenants', color='black')
+        ax_twin.set_ylabel('Number of Loans', color='gray')
+        axes[1, 1].set_title('Covenant Usage Trend Over Time')
+        axes[1, 1].grid(True, alpha=0.3)
         
-        axes[1, 0].barh(range(len(lender_avg_covenants)), lender_avg_covenants.values, alpha=0.8)
-        axes[1, 0].set_yticks(range(len(lender_avg_covenants)))
-        axes[1, 0].set_yticklabels([name[:20] + '...' if len(name) > 20 else name 
-                                   for name in lender_avg_covenants.index], fontsize=8)
-        axes[1, 0].set_xlabel('Average Number of Covenants')
-        axes[1, 0].set_title('Average Covenants by Nonbank Lender Type')
-        axes[1, 0].grid(True, alpha=0.3)
+        # Combine legends
+        lines = line1 + line2 + line3 + line4
+        labels = [l.get_label() for l in lines]
+        axes[1, 1].legend(lines, labels, loc='upper left', fontsize=8)
+    else:
+        axes[1, 1].text(0.5, 0.5, 'Insufficient data for time trend', 
+                       transform=axes[1, 1].transAxes, ha='center', va='center')
+        axes[1, 1].set_title('Covenant Usage Trend Over Time')
     
-    # 4. Time trend of overall covenant usage
-    yearly_trend = df.groupby('year')['total_info_covenants'].agg(['mean', 'count']).reset_index()
-    yearly_trend = yearly_trend[yearly_trend['count'] >= 10]  # Filter years with sufficient data
+    # Initialize variables for loan characteristics
+    direct_bank_amount = pd.Series([])
+    nondirect_bank_amount = pd.Series([])
+    direct_bank_spread = pd.Series([])
+    nondirect_bank_spread = pd.Series([])
+    direct_bank_maturity = pd.Series([])
+    nondirect_bank_maturity = pd.Series([])
     
-    ax_twin = axes[1, 1].twinx()
-    line1 = axes[1, 1].plot(yearly_trend['year'], yearly_trend['mean'], 'b-o', label='Avg Covenants')
-    line2 = ax_twin.plot(yearly_trend['year'], yearly_trend['count'], 'r-s', label='Loan Count')
+    # 5. Deal Amount (Facility Amount) Comparison
+    if 'facility_amount' in direct_bank_data.columns and 'facility_amount' in nondirect_bank_data.columns:
+        direct_bank_amount = pd.to_numeric(direct_bank_data['facility_amount'], errors='coerce').dropna()
+        nondirect_bank_amount = pd.to_numeric(nondirect_bank_data['facility_amount'], errors='coerce').dropna()
+        
+        if len(direct_bank_amount) > 0 and len(nondirect_bank_amount) > 0:
+            # Box plot comparison
+            data_to_plot = [direct_bank_amount, nondirect_bank_amount]
+            bp = axes[2, 0].boxplot(data_to_plot, labels=['Direct Bank', 'Non-Direct Bank'], patch_artist=True)
+            bp['boxes'][0].set_facecolor('green')
+            bp['boxes'][0].set_alpha(0.7)
+            bp['boxes'][1].set_facecolor('orange')
+            bp['boxes'][1].set_alpha(0.7)
+            
+            axes[2, 0].set_ylabel('Facility Amount (Millions USD)')
+            axes[2, 0].set_title('Deal Amount Distribution')
+            axes[2, 0].grid(True, alpha=0.3, axis='y')
+            
+            # Add mean values as text
+            mean_direct = direct_bank_amount.mean()
+            mean_nondirect = nondirect_bank_amount.mean()
+            axes[2, 0].text(0.5, 0.95, f'Mean Direct: ${mean_direct:.1f}M\nMean Non-Direct: ${mean_nondirect:.1f}M',
+                           transform=axes[2, 0].transAxes, ha='center', va='top',
+                           bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5), fontsize=9)
+        else:
+            axes[2, 0].text(0.5, 0.5, 'Insufficient data for deal amount', 
+                           transform=axes[2, 0].transAxes, ha='center', va='center')
+            axes[2, 0].set_title('Deal Amount Distribution')
+    else:
+        axes[2, 0].text(0.5, 0.5, 'Facility amount data not available', 
+                       transform=axes[2, 0].transAxes, ha='center', va='center')
+        axes[2, 0].set_title('Deal Amount Distribution')
     
-    axes[1, 1].set_xlabel('Year')
-    axes[1, 1].set_ylabel('Average Covenants', color='b')
-    ax_twin.set_ylabel('Number of Loans', color='r')
-    axes[1, 1].set_title('Covenant Usage Trend Over Time')
-    axes[1, 1].grid(True, alpha=0.3)
+    # 6. Interest Spread Comparison
+    if 'clean_interest_spread' in direct_bank_data.columns and 'clean_interest_spread' in nondirect_bank_data.columns:
+        direct_bank_spread = pd.to_numeric(direct_bank_data['clean_interest_spread'], errors='coerce').dropna()
+        nondirect_bank_spread = pd.to_numeric(nondirect_bank_data['clean_interest_spread'], errors='coerce').dropna()
+        
+        if len(direct_bank_spread) > 0 and len(nondirect_bank_spread) > 0:
+            # Box plot comparison
+            data_to_plot = [direct_bank_spread, nondirect_bank_spread]
+            bp = axes[2, 1].boxplot(data_to_plot, labels=['Direct Bank', 'Non-Direct Bank'], patch_artist=True)
+            bp['boxes'][0].set_facecolor('green')
+            bp['boxes'][0].set_alpha(0.7)
+            bp['boxes'][1].set_facecolor('orange')
+            bp['boxes'][1].set_alpha(0.7)
+            
+            axes[2, 1].set_ylabel('Interest Spread (basis points)')
+            axes[2, 1].set_title('Interest Spread Distribution')
+            axes[2, 1].grid(True, alpha=0.3, axis='y')
+            
+            # Add mean values as text
+            mean_direct = direct_bank_spread.mean()
+            mean_nondirect = nondirect_bank_spread.mean()
+            axes[2, 1].text(0.5, 0.95, f'Mean Direct: {mean_direct:.1f} bps\nMean Non-Direct: {mean_nondirect:.1f} bps',
+                           transform=axes[2, 1].transAxes, ha='center', va='top',
+                           bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5), fontsize=9)
+        else:
+            axes[2, 1].text(0.5, 0.5, 'Insufficient data for interest spread', 
+                           transform=axes[2, 1].transAxes, ha='center', va='center')
+            axes[2, 1].set_title('Interest Spread Distribution')
+    else:
+        axes[2, 1].text(0.5, 0.5, 'Interest spread data not available', 
+                       transform=axes[2, 1].transAxes, ha='center', va='center')
+        axes[2, 1].set_title('Interest Spread Distribution')
     
-    # Combine legends
-    lines = line1 + line2
-    labels = [l.get_label() for l in lines]
-    axes[1, 1].legend(lines, labels, loc='upper left')
+    # 7. Maturity Comparison
+    if 'maturity_months' in direct_bank_data.columns and 'maturity_months' in nondirect_bank_data.columns:
+        direct_bank_maturity = pd.to_numeric(direct_bank_data['maturity_months'], errors='coerce').dropna()
+        nondirect_bank_maturity = pd.to_numeric(nondirect_bank_data['maturity_months'], errors='coerce').dropna()
+        
+        if len(direct_bank_maturity) > 0 and len(nondirect_bank_maturity) > 0:
+            # Box plot comparison
+            data_to_plot = [direct_bank_maturity, nondirect_bank_maturity]
+            bp = axes[3, 0].boxplot(data_to_plot, labels=['Direct Bank', 'Non-Direct Bank'], patch_artist=True)
+            bp['boxes'][0].set_facecolor('green')
+            bp['boxes'][0].set_alpha(0.7)
+            bp['boxes'][1].set_facecolor('orange')
+            bp['boxes'][1].set_alpha(0.7)
+            
+            axes[3, 0].set_ylabel('Maturity (months)')
+            axes[3, 0].set_title('Maturity Distribution')
+            axes[3, 0].grid(True, alpha=0.3, axis='y')
+            
+            # Add mean values as text
+            mean_direct = direct_bank_maturity.mean()
+            mean_nondirect = nondirect_bank_maturity.mean()
+            axes[3, 0].text(0.5, 0.95, f'Mean Direct: {mean_direct:.1f} months\nMean Non-Direct: {mean_nondirect:.1f} months',
+                           transform=axes[3, 0].transAxes, ha='center', va='top',
+                           bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5), fontsize=9)
+        else:
+            axes[3, 0].text(0.5, 0.5, 'Insufficient data for maturity', 
+                           transform=axes[3, 0].transAxes, ha='center', va='center')
+            axes[3, 0].set_title('Maturity Distribution')
+    else:
+        axes[3, 0].text(0.5, 0.5, 'Maturity data not available', 
+                       transform=axes[3, 0].transAxes, ha='center', va='center')
+        axes[3, 0].set_title('Maturity Distribution')
+    
+    # 8. Combined Loan Characteristics Summary (bar chart)
+    loan_chars = ['Facility Amount\n($M)', 'Interest Spread\n(bps)', 'Maturity\n(months)']
+    direct_means = []
+    nondirect_means = []
+    
+    # Use already computed values
+    if len(direct_bank_amount) > 0:
+        direct_means.append(direct_bank_amount.mean())
+    else:
+        direct_means.append(0)
+    
+    if len(direct_bank_spread) > 0:
+        direct_means.append(direct_bank_spread.mean())
+    else:
+        direct_means.append(0)
+    
+    if len(direct_bank_maturity) > 0:
+        direct_means.append(direct_bank_maturity.mean())
+    else:
+        direct_means.append(0)
+    
+    if len(nondirect_bank_amount) > 0:
+        nondirect_means.append(nondirect_bank_amount.mean())
+    else:
+        nondirect_means.append(0)
+    
+    if len(nondirect_bank_spread) > 0:
+        nondirect_means.append(nondirect_bank_spread.mean())
+    else:
+        nondirect_means.append(0)
+    
+    if len(nondirect_bank_maturity) > 0:
+        nondirect_means.append(nondirect_bank_maturity.mean())
+    else:
+        nondirect_means.append(0)
+    
+    # Normalize for comparison (use relative values)
+    x_loan_chars = np.arange(len(loan_chars))
+    
+    # Create normalized comparison (divide by max to show relative differences)
+    max_vals = [max(abs(d), abs(n)) if (d != 0 or n != 0) else 1 for d, n in zip(direct_means, nondirect_means)]
+    direct_normalized = [d/m if m > 0 else 0 for d, m in zip(direct_means, max_vals)]
+    nondirect_normalized = [n/m if m > 0 else 0 for n, m in zip(nondirect_means, max_vals)]
+    
+    # Or just show actual values with different scales - let's use a grouped bar chart
+    axes[3, 1].bar(x_loan_chars - width/2, direct_means, width, label='Direct Bank', alpha=0.8, color='green')
+    axes[3, 1].bar(x_loan_chars + width/2, nondirect_means, width, label='Non-Direct Bank', alpha=0.8, color='orange')
+    axes[3, 1].set_xlabel('Loan Characteristic')
+    axes[3, 1].set_ylabel('Mean Value')
+    axes[3, 1].set_title('Loan Characteristics Comparison (Mean Values)')
+    axes[3, 1].set_xticks(x_loan_chars)
+    axes[3, 1].set_xticklabels(loan_chars)
+    axes[3, 1].legend()
+    axes[3, 1].grid(True, alpha=0.3, axis='y')
+    
+    # Add maturity comparison as a bar chart in the summary stats area or create a combined plot
+    # Let's update the summary stats to include these metrics
+    if 'maturity_months' in direct_bank_data.columns and 'maturity_months' in nondirect_bank_data.columns:
+        direct_bank_maturity = pd.to_numeric(direct_bank_data['maturity_months'], errors='coerce').dropna()
+        nondirect_bank_maturity = pd.to_numeric(nondirect_bank_data['maturity_months'], errors='coerce').dropna()
+        
+        # Update summary stats text to include loan characteristics
+        summary_stats['Direct Bank']['Avg Facility Amount'] = direct_bank_amount.mean() if len(direct_bank_amount) > 0 else np.nan
+        summary_stats['Direct Bank']['Avg Interest Spread'] = direct_bank_spread.mean() if len(direct_bank_spread) > 0 else np.nan
+        summary_stats['Direct Bank']['Avg Maturity'] = direct_bank_maturity.mean() if len(direct_bank_maturity) > 0 else np.nan
+        
+        summary_stats['Non-Direct Bank']['Avg Facility Amount'] = nondirect_bank_amount.mean() if len(nondirect_bank_amount) > 0 else np.nan
+        summary_stats['Non-Direct Bank']['Avg Interest Spread'] = nondirect_bank_spread.mean() if len(nondirect_bank_spread) > 0 else np.nan
+        summary_stats['Non-Direct Bank']['Avg Maturity'] = nondirect_bank_maturity.mean() if len(nondirect_bank_maturity) > 0 else np.nan
+        
+        # Update summary text
+        summary_text = "Summary Statistics:\n\n"
+        summary_text += "Direct Bank Loans:\n"
+        summary_text += f"  Count: {summary_stats['Direct Bank']['Count']:,}\n"
+        summary_text += f"  Avg Covenants: {summary_stats['Direct Bank']['Avg Covenants']:.2f}\n"
+        summary_text += f"  Monthly FS: {summary_stats['Direct Bank']['Monthly FS %']:.1f}%\n"
+        summary_text += f"  Projected FS: {summary_stats['Direct Bank']['Projected FS %']:.1f}%\n"
+        summary_text += f"  Meeting: {summary_stats['Direct Bank']['Meeting %']:.1f}%\n"
+        if not np.isnan(summary_stats['Direct Bank']['Avg Facility Amount']):
+            summary_text += f"  Avg Facility: ${summary_stats['Direct Bank']['Avg Facility Amount']:.1f}M\n"
+        if not np.isnan(summary_stats['Direct Bank']['Avg Interest Spread']):
+            summary_text += f"  Avg Spread: {summary_stats['Direct Bank']['Avg Interest Spread']:.1f} bps\n"
+        if not np.isnan(summary_stats['Direct Bank']['Avg Maturity']):
+            summary_text += f"  Avg Maturity: {summary_stats['Direct Bank']['Avg Maturity']:.1f} months\n"
+        summary_text += "\nNon-Direct Bank Loans:\n"
+        summary_text += f"  Count: {summary_stats['Non-Direct Bank']['Count']:,}\n"
+        summary_text += f"  Avg Covenants: {summary_stats['Non-Direct Bank']['Avg Covenants']:.2f}\n"
+        summary_text += f"  Monthly FS: {summary_stats['Non-Direct Bank']['Monthly FS %']:.1f}%\n"
+        summary_text += f"  Projected FS: {summary_stats['Non-Direct Bank']['Projected FS %']:.1f}%\n"
+        summary_text += f"  Meeting: {summary_stats['Non-Direct Bank']['Meeting %']:.1f}%\n"
+        if not np.isnan(summary_stats['Non-Direct Bank']['Avg Facility Amount']):
+            summary_text += f"  Avg Facility: ${summary_stats['Non-Direct Bank']['Avg Facility Amount']:.1f}M\n"
+        if not np.isnan(summary_stats['Non-Direct Bank']['Avg Interest Spread']):
+            summary_text += f"  Avg Spread: {summary_stats['Non-Direct Bank']['Avg Interest Spread']:.1f} bps\n"
+        if not np.isnan(summary_stats['Non-Direct Bank']['Avg Maturity']):
+            summary_text += f"  Avg Maturity: {summary_stats['Non-Direct Bank']['Avg Maturity']:.1f} months"
+        
+        # Update the summary stats text box (make it more compact)
+        axes[1, 0].clear()
+        axes[1, 0].text(0.05, 0.5, summary_text, transform=axes[1, 0].transAxes,
+                        fontsize=9, verticalalignment='center', family='monospace',
+                        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        axes[1, 0].set_xlim(0, 1)
+        axes[1, 0].set_ylim(0, 1)
+        axes[1, 0].axis('off')
+        axes[1, 0].set_title('Summary Statistics')
+        
+        # Add maturity bar chart comparison
+        if len(direct_bank_maturity) > 0 and len(nondirect_bank_maturity) > 0:
+            # Create a bar chart for maturity comparison
+            maturity_means = [direct_bank_maturity.mean(), nondirect_bank_maturity.mean()]
+            maturity_stds = [direct_bank_maturity.std(), nondirect_bank_maturity.std()]
+            x_maturity = np.arange(2)
+            
+            # Add as inset or modify time trend to show maturity
+            # Actually, let's add it as text annotation on the time trend plot or create a small subplot
+            # For now, add maturity info to the summary stats area as additional text
+            pass
     
     plt.tight_layout()
-    plt.savefig(fig_dir / "6c_InfoCovenants_Detailed_Analysis.png", dpi=300, bbox_inches='tight')
+    plt.savefig(fig_dir / "6c_InfoCovenants_Detailed_DirectBank_vs_NonDirectBank.png", dpi=300, bbox_inches='tight')
     plt.close()
+
+
 
 
 def main():
@@ -405,24 +591,20 @@ def main():
     # Extract year from deal_active_date
     df['year'] = extract_year_from_date('deal_active_date', df)
     
-    # Filter to observations with valid years
-    df = df[df['year'].notna() & (df['year'] >= 2010) & (df['year'] <= 2023)]
+    # Filter to observations with valid years (keep all years)
+    df = df[df['year'].notna()]
     print(f"After filtering by year: {len(df)} observations")
     
     print(f"Year range: {df['year'].min()} to {df['year'].max()}")
-    print(f"Bank loans: {len(df[df['nonbank_lender'] == 0])}")
-    print(f"Nonbank loans: {len(df[df['nonbank_lender'] == 1])}")
 
     # Create visualizations
     print("\nCreating time series plots...")
-    create_time_series_bank_vs_nonbank(df, fig_dir)
-    print("  - Bank vs Nonbank time series plot created")
     
-    create_time_series_nonbank_types(df, fig_dir)
-    print("  - Nonbank types time series plot created")
+    create_time_series_direct_vs_nondirect(df, fig_dir)
+    print("  - Direct vs Non-Direct time series plot created")
     
-    create_detailed_comparison_plots(df, fig_dir)
-    print("  - Detailed comparison plots created")
+    create_detailed_comparison_direct_bank_vs_nondirect_bank(df, fig_dir)
+    print("  - Detailed comparison plots (Direct Bank vs Non-Direct Bank) created")
 
     print(f"\nAll figures saved to: {fig_dir}")
     print("Done.")

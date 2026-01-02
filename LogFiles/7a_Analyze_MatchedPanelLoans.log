@@ -1,0 +1,2670 @@
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Code/LogFiles/7a_Analyze_MatchedPanelLoans.log
+  log type:  text
+ opened on:   3 Nov 2025, 11:30:30
+
+. 
+. /**************
+>         Data Preparation
+>         ***************/
+. 
+. *** Load matched panel with covenant data
+. import delimited "$intdir/6e_CleanMatchedPanel.csv", clear
+(encoding automatically selected: ISO-8859-1)
+(216 vars, 1,202 obs)
+
+. 
+. gen nonbank_lender = (lender_type == "nonbank")
+
+. replace nonbank_lender = 0 if missing(nonbank_lender)
+(0 real changes made)
+
+. 
+. *** Generate all_info_covenants dummy (1 if all three covenants are present)
+. gen all_info_covenants = (monthly_fs == 1 & projected_fs == 1 & lender_meeting == 1)
+
+. replace all_info_covenants = 0 if missing(all_info_covenants)
+(0 real changes made)
+
+. 
+. local borr_vars "log_at_lag1 leverage_lag1 tangibility_lag1 profitability_lag1 ret_buy_and_hold ret_vol"
+
+. local loan_vars "maturity_months facility_amount"
+
+. 
+. /**************
+>         Covenant Regressions (Table 1)
+>         ***************/
+. 
+. *** Monthly financial statements - No controls
+. reghdfe monthly_fs nonbank_lender, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,202
+Absorbing 2 HDFE groups                           F(   1,    699) =       2.82
+Statistics robust to heteroskedasticity           Prob > F        =     0.0934
+                                                  R-squared       =     0.0956
+                                                  Adj R-squared   =     0.0764
+                                                  Within R-sq.    =     0.0052
+Number of clusters (gvkey)   =        700         Root MSE        =     0.4404
+
+                                  (Std. err. adjusted for 700 clusters in gvkey)
+--------------------------------------------------------------------------------
+               |               Robust
+    monthly_fs | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+---------------+----------------------------------------------------------------
+nonbank_lender |   .0649135   .0386368     1.68   0.093    -.0109447    .1407716
+         _cons |   .2670441    .022101    12.08   0.000     .2236518    .3104364
+--------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table1_CovenantRegressions.xls", replace excel ///
+>         ctitle("Monthly FS") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Borrower Controls, NO, Loan Controls, NO) ///
+>         keep(nonbank_lender)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table1_CovenantRegressions.xls
+dir : seeout
+
+. 
+. *** Monthly financial statements - Borrower controls
+. reghdfe monthly_fs nonbank_lender `borr_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(   7,    665) =       8.96
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.1598
+                                                  Adj R-squared   =     0.1363
+                                                  Within R-sq.    =     0.0835
+Number of clusters (gvkey)   =        666         Root MSE        =     0.4248
+
+                                      (Std. err. adjusted for 666 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+        monthly_fs | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+    nonbank_lender |   .0748154   .0375667     1.99   0.047     .0010518    .1485789
+       log_at_lag1 |  -.0743672   .0107495    -6.92   0.000    -.0954744   -.0532601
+     leverage_lag1 |   .0203583   .0559851     0.36   0.716    -.0895706    .1302872
+  tangibility_lag1 |  -.0446928   .0844285    -0.53   0.597    -.2104714    .1210858
+profitability_lag1 |   .0815336   .0838609     0.97   0.331    -.0831305    .2461976
+  ret_buy_and_hold |   .0127095   .0242526     0.52   0.600    -.0349115    .0603304
+           ret_vol |   .2926215   .2005404     1.46   0.145     -.101147    .6863901
+             _cons |   .7042375   .0897344     7.85   0.000     .5280406    .8804344
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table1_CovenantRegressions.xls", append excel ///
+>         ctitle("Monthly FS") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Borrower Controls, YES, Loan Controls, NO) ///
+>         keep(nonbank_lender `borr_vars')
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table1_CovenantRegressions.xls
+dir : seeout
+
+. 
+. *** Monthly financial statements - Borrower + Loan controls
+. reghdfe monthly_fs nonbank_lender `borr_vars' `loan_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(   9,    665) =       8.95
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.1610
+                                                  Adj R-squared   =     0.1360
+                                                  Within R-sq.    =     0.0849
+Number of clusters (gvkey)   =        666         Root MSE        =     0.4248
+
+                                      (Std. err. adjusted for 666 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+        monthly_fs | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+    nonbank_lender |   .0730704   .0375993     1.94   0.052    -.0007572    .1468981
+       log_at_lag1 |  -.0676479   .0125746    -5.38   0.000    -.0923386   -.0429571
+     leverage_lag1 |   .0233993   .0564175     0.41   0.678    -.0873785    .1341772
+  tangibility_lag1 |   -.045642   .0843211    -0.54   0.588    -.2112097    .1199257
+profitability_lag1 |   .0839684   .0844767     0.99   0.321    -.0819048    .2498417
+  ret_buy_and_hold |   .0133477    .024204     0.55   0.581    -.0341777    .0608732
+           ret_vol |   .2746252   .2010844     1.37   0.172    -.1202115     .669462
+   maturity_months |   -.000184   .0006233    -0.30   0.768    -.0014079    .0010399
+   facility_amount |  -.0000358   .0000242    -1.48   0.140    -.0000832    .0000117
+             _cons |   .6834507   .1024327     6.67   0.000     .4823202    .8845813
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table1_CovenantRegressions.xls", append excel ///
+>         ctitle("Monthly FS") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Borrower Controls, YES, Loan Controls, YES) ///
+>         keep(nonbank_lender `borr_vars' `loan_vars')
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table1_CovenantRegressions.xls
+dir : seeout
+
+. 
+. *** Projected financial statements - No controls
+. reghdfe projected_fs nonbank_lender, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,202
+Absorbing 2 HDFE groups                           F(   1,    699) =       0.00
+Statistics robust to heteroskedasticity           Prob > F        =     0.9483
+                                                  R-squared       =     0.1153
+                                                  Adj R-squared   =     0.0965
+                                                  Within R-sq.    =     0.0000
+Number of clusters (gvkey)   =        700         Root MSE        =     0.4657
+
+                                  (Std. err. adjusted for 700 clusters in gvkey)
+--------------------------------------------------------------------------------
+               |               Robust
+  projected_fs | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+---------------+----------------------------------------------------------------
+nonbank_lender |   .0025467    .039248     0.06   0.948    -.0745114    .0796049
+         _cons |   .5993922   .0242539    24.71   0.000     .5517729    .6470115
+--------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table1_CovenantRegressions.xls", append excel ///
+>         ctitle("Projected FS") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Borrower Controls, NO, Loan Controls, NO) ///
+>         keep(nonbank_lender)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table1_CovenantRegressions.xls
+dir : seeout
+
+. 
+. *** Projected financial statements - Borrower controls
+. reghdfe projected_fs nonbank_lender `borr_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(   7,    665) =       9.95
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.2089
+                                                  Adj R-squared   =     0.1868
+                                                  Within R-sq.    =     0.1029
+Number of clusters (gvkey)   =        666         Root MSE        =     0.4405
+
+                                      (Std. err. adjusted for 666 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+      projected_fs | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+    nonbank_lender |   .0306304    .036491     0.84   0.402    -.0410211    .1022819
+       log_at_lag1 |  -.0937486   .0121088    -7.74   0.000    -.1175248   -.0699724
+     leverage_lag1 |    .012758   .0431063     0.30   0.767    -.0718829    .0973989
+  tangibility_lag1 |  -.1440393   .0811012    -1.78   0.076    -.3032846     .015206
+profitability_lag1 |   .2409422   .0916437     2.63   0.009     .0609964     .420888
+  ret_buy_and_hold |   .0076146   .0259217     0.29   0.769    -.0432838    .0585129
+           ret_vol |   -.086355   .2049215    -0.42   0.674    -.4887261    .3160161
+             _cons |   1.247175   .0941057    13.25   0.000     1.062394    1.431955
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table1_CovenantRegressions.xls", append excel ///
+>         ctitle("Projected FS") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Borrower Controls, YES, Loan Controls, NO) ///
+>         keep(nonbank_lender `borr_vars')
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table1_CovenantRegressions.xls
+dir : seeout
+
+. 
+. *** Projected financial statements - Borrower + Loan controls
+. reghdfe projected_fs nonbank_lender `borr_vars' `loan_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(   9,    665) =      10.14
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.2192
+                                                  Adj R-squared   =     0.1959
+                                                  Within R-sq.    =     0.1146
+Number of clusters (gvkey)   =        666         Root MSE        =     0.4380
+
+                                      (Std. err. adjusted for 666 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+      projected_fs | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+    nonbank_lender |   .0282335   .0363491     0.78   0.438    -.0431394    .0996064
+       log_at_lag1 |  -.0883819   .0143326    -6.17   0.000    -.1165244   -.0602394
+     leverage_lag1 |   .0085054   .0431094     0.20   0.844    -.0761416    .0931524
+  tangibility_lag1 |  -.1486403   .0805172    -1.85   0.065    -.3067388    .0094583
+profitability_lag1 |   .2364462   .0940852     2.51   0.012     .0517063    .4211861
+  ret_buy_and_hold |   .0047703   .0257898     0.18   0.853    -.0458689    .0554095
+           ret_vol |  -.0828819   .1989137    -0.42   0.677    -.4734564    .3076926
+   maturity_months |   .0018836   .0006752     2.79   0.005     .0005578    .0032094
+   facility_amount |   -.000049   .0000341    -1.44   0.151     -.000116    .0000179
+             _cons |   1.119611   .1036204    10.80   0.000     .9161485    1.323074
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table1_CovenantRegressions.xls", append excel ///
+>         ctitle("Projected FS") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Borrower Controls, YES, Loan Controls, YES) ///
+>         keep(nonbank_lender `borr_vars' `loan_vars')
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table1_CovenantRegressions.xls
+dir : seeout
+
+. 
+. *** Lender meetings - No controls
+. reghdfe lender_meeting nonbank_lender, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,202
+Absorbing 2 HDFE groups                           F(   1,    699) =       1.84
+Statistics robust to heteroskedasticity           Prob > F        =     0.1758
+                                                  R-squared       =     0.1463
+                                                  Adj R-squared   =     0.1281
+                                                  Within R-sq.    =     0.0030
+Number of clusters (gvkey)   =        700         Root MSE        =     0.4011
+
+                                  (Std. err. adjusted for 700 clusters in gvkey)
+--------------------------------------------------------------------------------
+               |               Robust
+lender_meeting | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+---------------+----------------------------------------------------------------
+nonbank_lender |   .0446149   .0329214     1.36   0.176    -.0200217    .1092515
+         _cons |    .221453   .0207105    10.69   0.000     .1807907    .2621152
+--------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table1_CovenantRegressions.xls", append excel ///
+>         ctitle("Lender Meeting") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Borrower Controls, NO, Loan Controls, NO) ///
+>         keep(nonbank_lender)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table1_CovenantRegressions.xls
+dir : seeout
+
+. 
+. *** Lender meetings - Borrower controls
+. reghdfe lender_meeting nonbank_lender `borr_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(   7,    665) =       2.60
+Statistics robust to heteroskedasticity           Prob > F        =     0.0119
+                                                  R-squared       =     0.1746
+                                                  Adj R-squared   =     0.1516
+                                                  Within R-sq.    =     0.0276
+Number of clusters (gvkey)   =        666         Root MSE        =     0.3940
+
+                                      (Std. err. adjusted for 666 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+    lender_meeting | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+    nonbank_lender |   .0445126   .0330891     1.35   0.179    -.0204592    .1094843
+       log_at_lag1 |   .0069534   .0091261     0.76   0.446     -.010966    .0248727
+     leverage_lag1 |   .1231134   .0506146     2.43   0.015     .0237297    .2224971
+  tangibility_lag1 |  -.0700319   .0726637    -0.96   0.336    -.2127099    .0726461
+profitability_lag1 |   .0113517   .0828575     0.14   0.891    -.1513421    .1740455
+  ret_buy_and_hold |   .0120926   .0224782     0.54   0.591    -.0320442    .0562294
+           ret_vol |   .4487727   .1783366     2.52   0.012      .098602    .7989434
+             _cons |   .0738458   .0754489     0.98   0.328     -.074301    .2219925
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table1_CovenantRegressions.xls", append excel ///
+>         ctitle("Lender Meeting") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Borrower Controls, YES, Loan Controls, NO) ///
+>         keep(nonbank_lender `borr_vars')
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table1_CovenantRegressions.xls
+dir : seeout
+
+. 
+. *** Lender meetings - Borrower + Loan controls
+. reghdfe lender_meeting nonbank_lender `borr_vars' `loan_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(   9,    665) =       2.58
+Statistics robust to heteroskedasticity           Prob > F        =     0.0062
+                                                  R-squared       =     0.1780
+                                                  Adj R-squared   =     0.1535
+                                                  Within R-sq.    =     0.0316
+Number of clusters (gvkey)   =        666         Root MSE        =     0.3936
+
+                                      (Std. err. adjusted for 666 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+    lender_meeting | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+    nonbank_lender |   .0443594   .0330036     1.34   0.179    -.0204445    .1091632
+       log_at_lag1 |   .0056162   .0102917     0.55   0.585     -.014592    .0258243
+     leverage_lag1 |   .1191752   .0505994     2.36   0.019     .0198213    .2185291
+  tangibility_lag1 |    -.07176   .0727592    -0.99   0.324    -.2146255    .0711055
+profitability_lag1 |   .0076542   .0844368     0.09   0.928    -.1581407    .1734492
+  ret_buy_and_hold |   .0102925   .0227692     0.45   0.651    -.0344157    .0550006
+           ret_vol |   .4612566   .1790814     2.58   0.010     .1096235    .8128898
+   maturity_months |   .0010495   .0005511     1.90   0.057    -.0000327    .0021317
+   facility_amount |  -3.09e-06   .0000262    -0.12   0.906    -.0000546    .0000484
+             _cons |   .0226307   .0793634     0.29   0.776    -.1332023    .1784638
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table1_CovenantRegressions.xls", append excel ///
+>         ctitle("Lender Meeting") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Borrower Controls, YES, Loan Controls, YES) ///
+>         keep(nonbank_lender `borr_vars' `loan_vars')
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table1_CovenantRegressions.xls
+dir : seeout
+
+. 
+. *** Total information covenants - No controls
+. reghdfe total_info_covenants nonbank_lender, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,202
+Absorbing 2 HDFE groups                           F(   1,    699) =       2.40
+Statistics robust to heteroskedasticity           Prob > F        =     0.1215
+                                                  R-squared       =     0.1610
+                                                  Adj R-squared   =     0.1432
+                                                  Within R-sq.    =     0.0041
+Number of clusters (gvkey)   =        700         Root MSE        =     0.8606
+
+                                  (Std. err. adjusted for 700 clusters in gvkey)
+--------------------------------------------------------------------------------
+               |               Robust
+total_info_c~s | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+---------------+----------------------------------------------------------------
+nonbank_lender |   .1120751   .0722829     1.55   0.121    -.0298425    .2539926
+         _cons |   1.087889   .0431745    25.20   0.000     1.003122    1.172657
+--------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table1_CovenantRegressions.xls", append excel ///
+>         ctitle("Total Info Cov") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Borrower Controls, NO, Loan Controls, NO) ///
+>         keep(nonbank_lender)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table1_CovenantRegressions.xls
+dir : seeout
+
+. 
+. *** Total information covenants - Borrower controls
+. reghdfe total_info_covenants nonbank_lender `borr_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(   7,    665) =      10.73
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.2497
+                                                  Adj R-squared   =     0.2288
+                                                  Within R-sq.    =     0.1104
+Number of clusters (gvkey)   =        666         Root MSE        =     0.8055
+
+                                      (Std. err. adjusted for 666 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+total_info_coven~s | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+    nonbank_lender |   .1499583   .0662211     2.26   0.024     .0199307    .2799859
+       log_at_lag1 |  -.1611625   .0211265    -7.63   0.000    -.2026451   -.1196798
+     leverage_lag1 |   .1562297   .1008699     1.55   0.122    -.0418321    .3542915
+  tangibility_lag1 |   -.258764   .1540508    -1.68   0.093    -.5612487    .0437206
+profitability_lag1 |   .3338275   .1982649     1.68   0.093    -.0554731     .723128
+  ret_buy_and_hold |   .0324166   .0463096     0.70   0.484     -.058514    .1233472
+           ret_vol |   .6550392   .4016069     1.63   0.103    -.1335311     1.44361
+             _cons |   2.025258   .1698091    11.93   0.000     1.691831    2.358684
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table1_CovenantRegressions.xls", append excel ///
+>         ctitle("Total Info Cov") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Borrower Controls, YES, Loan Controls, NO) ///
+>         keep(nonbank_lender `borr_vars')
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table1_CovenantRegressions.xls
+dir : seeout
+
+. 
+. *** Total information covenants - Borrower + Loan controls
+. reghdfe total_info_covenants nonbank_lender `borr_vars' `loan_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(   9,    665) =      10.93
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.2565
+                                                  Adj R-squared   =     0.2344
+                                                  Within R-sq.    =     0.1185
+Number of clusters (gvkey)   =        666         Root MSE        =     0.8025
+
+                                      (Std. err. adjusted for 666 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+total_info_coven~s | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+    nonbank_lender |   .1456633   .0661734     2.20   0.028     .0157293    .2755973
+       log_at_lag1 |  -.1504136   .0245883    -6.12   0.000    -.1986936   -.1021336
+     leverage_lag1 |     .15108   .1001889     1.51   0.132    -.0456447    .3478047
+  tangibility_lag1 |  -.2660422   .1546636    -1.72   0.086    -.5697301    .0376456
+profitability_lag1 |   .3280688   .2023539     1.62   0.105    -.0692606    .7253983
+  ret_buy_and_hold |   .0284105   .0464293     0.61   0.541    -.0627552    .1195762
+           ret_vol |       .653   .3938441     1.66   0.098    -.1203278    1.426328
+   maturity_months |   .0027491   .0013005     2.11   0.035     .0001955    .0053027
+   facility_amount |  -.0000879   .0000559    -1.57   0.116    -.0001976    .0000218
+             _cons |   1.825693   .1890088     9.66   0.000     1.454567    2.196818
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table1_CovenantRegressions.xls", append excel ///
+>         ctitle("Total Info Cov") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Borrower Controls, YES, Loan Controls, YES) ///
+>         keep(nonbank_lender `borr_vars' `loan_vars')
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table1_CovenantRegressions.xls
+dir : seeout
+
+. 
+. *** All information covenants - No controls
+. reghdfe all_info_covenants nonbank_lender, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,202
+Absorbing 2 HDFE groups                           F(   1,    699) =       0.03
+Statistics robust to heteroskedasticity           Prob > F        =     0.8623
+                                                  R-squared       =     0.0593
+                                                  Adj R-squared   =     0.0393
+                                                  Within R-sq.    =     0.0000
+Number of clusters (gvkey)   =        700         Root MSE        =     0.2500
+
+                                  (Std. err. adjusted for 700 clusters in gvkey)
+--------------------------------------------------------------------------------
+               |               Robust
+all_info_cov~s | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+---------------+----------------------------------------------------------------
+nonbank_lender |   .0032841   .0189219     0.17   0.862    -.0338665    .0404347
+         _cons |   .0682415   .0132047     5.17   0.000     .0423159     .094167
+--------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table1_CovenantRegressions.xls", append excel ///
+>         ctitle("All Info Cov") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Borrower Controls, NO, Loan Controls, NO) ///
+>         keep(nonbank_lender)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table1_CovenantRegressions.xls
+dir : seeout
+
+. 
+. *** All information covenants - Borrower controls
+. reghdfe all_info_covenants nonbank_lender `borr_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(   7,    665) =       1.23
+Statistics robust to heteroskedasticity           Prob > F        =     0.2821
+                                                  R-squared       =     0.0756
+                                                  Adj R-squared   =     0.0497
+                                                  Within R-sq.    =     0.0186
+Number of clusters (gvkey)   =        666         Root MSE        =     0.2401
+
+                                      (Std. err. adjusted for 666 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+all_info_covenants | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+    nonbank_lender |   .0041195   .0191261     0.22   0.830    -.0334352    .0416743
+       log_at_lag1 |  -.0130374   .0056633    -2.30   0.022    -.0241576   -.0019172
+     leverage_lag1 |   .0572184    .043274     1.32   0.187    -.0277517    .1421886
+  tangibility_lag1 |  -.0102936    .037696    -0.27   0.785    -.0843112    .0637239
+profitability_lag1 |   -.012542   .0786256    -0.16   0.873    -.1669264    .1418424
+  ret_buy_and_hold |   .0023409   .0161453     0.14   0.885     -.029361    .0340427
+           ret_vol |   .1110239   .1259151     0.88   0.378    -.1362152    .3582629
+             _cons |   .1119782   .0519948     2.15   0.032     .0098844     .214072
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table1_CovenantRegressions.xls", append excel ///
+>         ctitle("All Info Cov") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Borrower Controls, YES, Loan Controls, NO) ///
+>         keep(nonbank_lender `borr_vars')
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table1_CovenantRegressions.xls
+dir : seeout
+
+. 
+. *** All information covenants - Borrower + Loan controls
+. reghdfe all_info_covenants nonbank_lender `borr_vars' `loan_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(   9,    665) =       1.34
+Statistics robust to heteroskedasticity           Prob > F        =     0.2129
+                                                  R-squared       =     0.0781
+                                                  Adj R-squared   =     0.0507
+                                                  Within R-sq.    =     0.0214
+Number of clusters (gvkey)   =        666         Root MSE        =     0.2400
+
+                                      (Std. err. adjusted for 666 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+all_info_covenants | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+    nonbank_lender |   .0041651    .019146     0.22   0.828    -.0334287     .041759
+       log_at_lag1 |  -.0141569   .0062328    -2.27   0.023    -.0263952   -.0019186
+     leverage_lag1 |   .0550794   .0433361     1.27   0.204    -.0300127    .1401715
+  tangibility_lag1 |  -.0110744   .0377146    -0.29   0.769    -.0851283    .0629796
+profitability_lag1 |  -.0145212   .0793262    -0.18   0.855    -.1702813    .1412389
+  ret_buy_and_hold |   .0014151   .0162976     0.09   0.931    -.0305859    .0334161
+           ret_vol |   .1183823    .125372     0.94   0.345    -.1277904    .3645549
+   maturity_months |   .0005267   .0003307     1.59   0.112    -.0001226    .0011761
+   facility_amount |   9.57e-07    .000013     0.07   0.941    -.0000245    .0000264
+             _cons |   .0883324   .0570239     1.55   0.122    -.0236362     .200301
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table1_CovenantRegressions.xls", append excel ///
+>         ctitle("All Info Cov") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Borrower Controls, YES, Loan Controls, YES) ///
+>         keep(nonbank_lender `borr_vars' `loan_vars')
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table1_CovenantRegressions.xls
+dir : seeout
+
+. 
+. /**************
+>         Correlation Tables
+>         ***************/
+. 
+. *** Correlation table for nonbank loans
+. preserve
+
+. keep if nonbank_lender == 1
+(601 observations deleted)
+
+. correlate spread monthly_fs projected_fs lender_meeting total_info_covenants all_info_covenants, means
+(obs=601)
+
+    Variable |         Mean    Std. dev.          Min          Max
+-------------+----------------------------------------------------
+      spread |      483.378     269.6946           40         1175
+  monthly_fs |      .344426     .4755765            0            1
+projected_fs |     .6156406     .4868487            0            1
+lender_mee~g |     .2795341     .4491441            0            1
+total_info~s |     1.239601     .9269102            0            3
+all_info_c~s |      .078203     .2687144            0            1
+
+
+             |   spread monthl~s projec~s lender~g total_~s all_in~s
+-------------+------------------------------------------------------
+      spread |   1.0000
+  monthly_fs |   0.1460   1.0000
+projected_fs |   0.0080   0.2848   1.0000
+lender_mee~g |   0.0484  -0.0067   0.1492   1.0000
+total_info~s |   0.1026   0.6594   0.7436   0.5595   1.0000
+all_info_c~s |   0.1117   0.4018   0.2301   0.4676   0.5536   1.0000
+
+
+. matrix C_nonbank = r(C)
+
+. putexcel set "$tabdir/7a_CorrelationTables.xlsx", sheet("Nonbank") replace
+note: file will be replaced when the first putexcel command is issued.
+
+. putexcel A1 = "Correlation Matrix - Nonbank Loans"
+file /Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_CorrelationTables.xlsx saved
+
+. putexcel A2 = matrix(C_nonbank), names
+file /Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_CorrelationTables.xlsx saved
+
+. restore
+
+. 
+. *** Correlation table for bank loans
+. preserve
+
+. keep if nonbank_lender == 0
+(601 observations deleted)
+
+. correlate spread monthly_fs projected_fs lender_meeting total_info_covenants all_info_covenants, means
+(obs=601)
+
+    Variable |         Mean    Std. dev.          Min          Max
+-------------+----------------------------------------------------
+      spread |     484.2419     297.1485           40         1175
+  monthly_fs |     .2545757     .4359853            0            1
+projected_fs |     .5856905     .4930127            0            1
+lender_mee~g |     .2079867     .4062053            0            1
+total_info~s |     1.048253     .9234001            0            3
+all_info_c~s |     .0615641     .2405623            0            1
+
+
+             |   spread monthl~s projec~s lender~g total_~s all_in~s
+-------------+------------------------------------------------------
+      spread |   1.0000
+  monthly_fs |  -0.0102   1.0000
+projected_fs |  -0.1717   0.2744   1.0000
+lender_mee~g |   0.0737   0.1052   0.2479   1.0000
+total_info~s |  -0.0641   0.6649   0.7725   0.6219   1.0000
+all_info_c~s |   0.0885   0.4383   0.2154   0.4998   0.5418   1.0000
+
+
+. matrix C_bank = r(C)
+
+. putexcel set "$tabdir/7a_CorrelationTables.xlsx", sheet("Bank") modify
+
+. putexcel A1 = "Correlation Matrix - Bank Loans"
+file /Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_CorrelationTables.xlsx saved
+
+. putexcel A2 = matrix(C_bank), names
+file /Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_CorrelationTables.xlsx saved
+
+. restore
+
+. 
+. /**************
+>         Spread Sensitivity to Information Covenants (Table 2)
+>         ***************/
+. 
+. *** Monthly FS - Nonbank - No controls
+. reghdfe spread monthly_fs if nonbank_lender == 1, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 7 iterations)
+
+HDFE Linear regression                            Number of obs   =        601
+Absorbing 2 HDFE groups                           F(   1,    319) =       6.01
+Statistics robust to heteroskedasticity           Prob > F        =     0.0148
+                                                  R-squared       =     0.1978
+                                                  Adj R-squared   =     0.1629
+                                                  Within R-sq.    =     0.0191
+Number of clusters (gvkey)   =        320         Root MSE        =   246.7518
+
+                                (Std. err. adjusted for 320 clusters in gvkey)
+------------------------------------------------------------------------------
+             |               Robust
+      spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+  monthly_fs |   73.61433    30.0355     2.45   0.015     14.52163     132.707
+       _cons |   458.0234   18.87263    24.27   0.000     420.8928    495.1539
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", replace excel ///
+>         ctitle("Spread (NB)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Nonbank, Borrower Controls, NO, Loan Controls, NO) ///
+>         keep(monthly_fs)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Monthly FS - Nonbank - Borrower controls
+. reghdfe spread monthly_fs `borr_vars' if nonbank_lender == 1, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 7 iterations)
+
+HDFE Linear regression                            Number of obs   =        568
+Absorbing 2 HDFE groups                           F(   7,    302) =      15.84
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3673
+                                                  Adj R-squared   =     0.3307
+                                                  Within R-sq.    =     0.2101
+Number of clusters (gvkey)   =        303         Root MSE        =   222.2778
+
+                                      (Std. err. adjusted for 303 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+        monthly_fs |   23.48105     27.165     0.86   0.388     -29.9756     76.9377
+       log_at_lag1 |  -28.55541   10.24647    -2.79   0.006    -48.71893   -8.391896
+     leverage_lag1 |   7.393367   31.11296     0.24   0.812    -53.83228    68.61901
+  tangibility_lag1 |  -2.371682    56.2619    -0.04   0.966    -113.0867    108.3433
+profitability_lag1 |  -241.4695   64.72843    -3.73   0.000    -368.8453   -114.0936
+  ret_buy_and_hold |   -79.3594   19.75197    -4.02   0.000    -118.2283   -40.49048
+           ret_vol |   623.5783   121.8799     5.12   0.000      383.737    863.4196
+             _cons |   575.2307   76.89504     7.48   0.000     423.9128    726.5487
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (NB)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Nonbank, Borrower Controls, YES, Loan Controls, NO) ///
+>         keep(monthly_fs)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Monthly FS - Nonbank - Borrower + Loan controls
+. reghdfe spread monthly_fs `borr_vars' `loan_vars' if nonbank_lender == 1, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 7 iterations)
+
+HDFE Linear regression                            Number of obs   =        568
+Absorbing 2 HDFE groups                           F(   9,    302) =      18.00
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3811
+                                                  Adj R-squared   =     0.3428
+                                                  Within R-sq.    =     0.2273
+Number of clusters (gvkey)   =        303         Root MSE        =   220.2474
+
+                                      (Std. err. adjusted for 303 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+        monthly_fs |   23.73112   27.02253     0.88   0.381    -29.44517    76.90742
+       log_at_lag1 |  -16.59914   12.61196    -1.32   0.189    -41.41759    8.219316
+     leverage_lag1 |   15.94415   30.95667     0.52   0.607    -44.97394    76.86224
+  tangibility_lag1 |  -4.571149   57.03584    -0.08   0.936    -116.8091    107.6668
+profitability_lag1 |     -235.1   63.09203    -3.73   0.000    -359.2557   -110.9443
+  ret_buy_and_hold |  -73.22746   19.67881    -3.72   0.000    -111.9524   -34.50251
+           ret_vol |   574.5959   120.3276     4.78   0.000     337.8091    811.3826
+   maturity_months |  -.8378526   .5125249    -1.63   0.103    -1.846425    .1707197
+   facility_amount |  -.0647341    .024781    -2.61   0.009    -.1134994   -.0159688
+             _cons |    566.777   92.24908     6.14   0.000     385.2446    748.3094
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (NB)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Nonbank, Borrower Controls, YES, Loan Controls, YES) ///
+>         keep(monthly_fs)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Monthly FS - Bank - No controls
+. reghdfe spread monthly_fs if nonbank_lender == 0, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =        601
+Absorbing 2 HDFE groups                           F(   1,    432) =       0.57
+Statistics robust to heteroskedasticity           Prob > F        =     0.4517
+                                                  R-squared       =     0.1808
+                                                  Adj R-squared   =     0.1452
+                                                  Within R-sq.    =     0.0013
+Number of clusters (gvkey)   =        433         Root MSE        =   274.7251
+
+                                (Std. err. adjusted for 433 clusters in gvkey)
+------------------------------------------------------------------------------
+             |               Robust
+      spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+  monthly_fs |   24.89318   33.04675     0.75   0.452    -40.05924     89.8456
+       _cons |   477.9047   19.44965    24.57   0.000      439.677    516.1324
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (Bank)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Bank, Borrower Controls, NO, Loan Controls, NO) ///
+>         keep(monthly_fs)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Monthly FS - Bank - Borrower controls
+. reghdfe spread monthly_fs `borr_vars' if nonbank_lender == 0, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =        574
+Absorbing 2 HDFE groups                           F(   7,    414) =      15.60
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3900
+                                                  Adj R-squared   =     0.3551
+                                                  Within R-sq.    =     0.2476
+Number of clusters (gvkey)   =        415         Root MSE        =   240.6681
+
+                                      (Std. err. adjusted for 415 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+        monthly_fs |    13.2208   31.52133     0.42   0.675    -48.74101    75.18262
+       log_at_lag1 |  -2.630456   10.32747    -0.25   0.799    -22.93128    17.67037
+     leverage_lag1 |   171.5665   52.30901     3.28   0.001     68.74212    274.3909
+  tangibility_lag1 |  -23.25539   58.05101    -0.40   0.689    -137.3669    90.85611
+profitability_lag1 |  -226.0383   69.08165    -3.27   0.001    -361.8328   -90.24376
+  ret_buy_and_hold |  -36.82049   13.56127    -2.72   0.007    -63.47803   -10.16295
+           ret_vol |   1080.836   154.2172     7.01   0.000     777.6891    1383.982
+             _cons |    298.999   70.27444     4.25   0.000     160.8598    437.1382
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (Bank)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Bank, Borrower Controls, YES, Loan Controls, NO) ///
+>         keep(monthly_fs)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Monthly FS - Bank - Borrower + Loan controls
+. reghdfe spread monthly_fs `borr_vars' `loan_vars' if nonbank_lender == 0, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =        574
+Absorbing 2 HDFE groups                           F(   9,    414) =      13.09
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3993
+                                                  Adj R-squared   =     0.3626
+                                                  Within R-sq.    =     0.2590
+Number of clusters (gvkey)   =        415         Root MSE        =   239.2766
+
+                                      (Std. err. adjusted for 415 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+        monthly_fs |   10.66302   31.22877     0.34   0.733    -50.72371    72.04975
+       log_at_lag1 |     1.5084   10.63024     0.14   0.887    -19.38757    22.40437
+     leverage_lag1 |   168.2617   51.23834     3.28   0.001     67.54197    268.9814
+  tangibility_lag1 |  -26.23397   57.76024    -0.45   0.650    -139.7739    87.30595
+profitability_lag1 |  -227.0794   68.30651    -3.32   0.001    -361.3502   -92.80852
+  ret_buy_and_hold |   -37.1865    13.3006    -2.80   0.005    -63.33163   -11.04136
+           ret_vol |   1059.023   151.1457     7.01   0.000     761.9143    1356.132
+   maturity_months |   1.034188   .5287384     1.96   0.051    -.0051587    2.073535
+   facility_amount |   -.043126   .0300734    -1.43   0.152    -.1022417    .0159897
+             _cons |   229.8897   75.79163     3.03   0.003      80.9053    378.8741
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (Bank)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Bank, Borrower Controls, YES, Loan Controls, YES) ///
+>         keep(monthly_fs)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Projected FS - Nonbank - No controls
+. reghdfe spread projected_fs if nonbank_lender == 1, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 7 iterations)
+
+HDFE Linear regression                            Number of obs   =        601
+Absorbing 2 HDFE groups                           F(   1,    319) =       0.00
+Statistics robust to heteroskedasticity           Prob > F        =     0.9546
+                                                  R-squared       =     0.1822
+                                                  Adj R-squared   =     0.1466
+                                                  Within R-sq.    =     0.0000
+Number of clusters (gvkey)   =        320         Root MSE        =   249.1397
+
+                                (Std. err. adjusted for 320 clusters in gvkey)
+------------------------------------------------------------------------------
+             |               Robust
+      spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+projected_fs |   1.940468   34.04406     0.06   0.955    -65.03878    68.91971
+       _cons |   482.1834   28.38727    16.99   0.000     426.3335    538.0333
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (NB)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Nonbank, Borrower Controls, NO, Loan Controls, NO) ///
+>         keep(projected_fs)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Projected FS - Nonbank - Borrower controls
+. reghdfe spread projected_fs `borr_vars' if nonbank_lender == 1, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 7 iterations)
+
+HDFE Linear regression                            Number of obs   =        568
+Absorbing 2 HDFE groups                           F(   7,    302) =      16.07
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3666
+                                                  Adj R-squared   =     0.3300
+                                                  Within R-sq.    =     0.2093
+Number of clusters (gvkey)   =        303         Root MSE        =   222.3881
+
+                                      (Std. err. adjusted for 303 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+      projected_fs |  -16.99268   29.58226    -0.57   0.566    -75.20613    41.22077
+       log_at_lag1 |  -32.69146    10.2743    -3.18   0.002    -52.90974   -12.47319
+     leverage_lag1 |   10.02406   31.04886     0.32   0.747    -51.07544    71.12356
+  tangibility_lag1 |  -6.966758   56.49567    -0.12   0.902    -118.1418    104.2083
+profitability_lag1 |  -228.3931   63.54286    -3.59   0.000     -353.436   -103.3503
+  ret_buy_and_hold |  -80.41194   19.07007    -4.22   0.000     -117.939    -42.8849
+           ret_vol |     627.27   119.6288     5.24   0.000     391.8585    862.6815
+             _cons |   620.6378   84.19394     7.37   0.000     454.9568    786.3189
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (NB)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Nonbank, Borrower Controls, YES, Loan Controls, NO) ///
+>         keep(projected_fs)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Projected FS - Nonbank - Borrower + Loan controls
+. reghdfe spread projected_fs `borr_vars' `loan_vars' if nonbank_lender == 1, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 7 iterations)
+
+HDFE Linear regression                            Number of obs   =        568
+Absorbing 2 HDFE groups                           F(   9,    302) =      18.31
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3802
+                                                  Adj R-squared   =     0.3419
+                                                  Within R-sq.    =     0.2263
+Number of clusters (gvkey)   =        303         Root MSE        =   220.4035
+
+                                      (Std. err. adjusted for 303 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+      projected_fs |  -14.32703   30.44816    -0.47   0.638    -74.24444    45.59039
+       log_at_lag1 |  -20.32021   12.55382    -1.62   0.107    -45.02425    4.383832
+     leverage_lag1 |   18.56927   30.80265     0.60   0.547    -42.04574    79.18428
+  tangibility_lag1 |  -9.145536   57.26267    -0.16   0.873    -121.8299    103.5388
+profitability_lag1 |  -223.3425   62.14353    -3.59   0.000    -345.6317   -101.0534
+  ret_buy_and_hold |  -74.52672   19.10539    -3.90   0.000    -112.1233   -36.93017
+           ret_vol |   579.7299   117.8188     4.92   0.000       347.88    811.5797
+   maturity_months |  -.7930888    .522542    -1.52   0.130    -1.821373    .2351957
+   facility_amount |  -.0656289   .0251222    -2.61   0.009    -.1150656   -.0161922
+             _cons |   605.3082   94.64286     6.40   0.000     419.0652    791.5511
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (NB)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Nonbank, Borrower Controls, YES, Loan Controls, YES) ///
+>         keep(projected_fs)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Projected FS - Bank - No controls
+. reghdfe spread projected_fs if nonbank_lender == 0, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =        601
+Absorbing 2 HDFE groups                           F(   1,    432) =       0.61
+Statistics robust to heteroskedasticity           Prob > F        =     0.4361
+                                                  R-squared       =     0.1811
+                                                  Adj R-squared   =     0.1455
+                                                  Within R-sq.    =     0.0016
+Number of clusters (gvkey)   =        433         Root MSE        =   274.6862
+
+                                (Std. err. adjusted for 433 clusters in gvkey)
+------------------------------------------------------------------------------
+             |               Robust
+      spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+projected_fs |  -24.43426   31.34475    -0.78   0.436    -86.04144    37.17293
+       _cons |   498.5528   26.14766    19.07   0.000     447.1603    549.9453
+------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (Bank)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Bank, Borrower Controls, NO, Loan Controls, NO) ///
+>         keep(projected_fs)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Projected FS - Bank - Borrower controls
+. reghdfe spread projected_fs `borr_vars' if nonbank_lender == 0, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =        574
+Absorbing 2 HDFE groups                           F(   7,    414) =      17.39
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3949
+                                                  Adj R-squared   =     0.3603
+                                                  Within R-sq.    =     0.2536
+Number of clusters (gvkey)   =        415         Root MSE        =   239.7068
+
+                                      (Std. err. adjusted for 415 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+      projected_fs |  -52.27411   27.04751    -1.93   0.054    -105.4417    .8934647
+       log_at_lag1 |  -7.582479   9.990461    -0.76   0.448    -27.22083    12.05588
+     leverage_lag1 |   172.6363   51.90228     3.33   0.001     70.61148    274.6612
+  tangibility_lag1 |  -33.96237   57.80559    -0.59   0.557    -147.5914    79.66669
+profitability_lag1 |  -220.5131   66.14486    -3.33   0.001    -350.5347   -90.49142
+  ret_buy_and_hold |  -36.63475   13.47719    -2.72   0.007      -63.127   -10.14249
+           ret_vol |   1098.311   152.8618     7.18   0.000     797.8285    1398.793
+             _cons |   365.1378   72.66804     5.02   0.000     222.2935    507.9822
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (Bank)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Bank, Borrower Controls, YES, Loan Controls, NO) ///
+>         keep(projected_fs)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Projected FS - Bank - Borrower + Loan controls
+. reghdfe spread projected_fs `borr_vars' `loan_vars' if nonbank_lender == 0, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =        574
+Absorbing 2 HDFE groups                           F(   9,    414) =      14.92
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.4055
+                                                  Adj R-squared   =     0.3691
+                                                  Within R-sq.    =     0.2667
+Number of clusters (gvkey)   =        415         Root MSE        =   238.0391
+
+                                      (Std. err. adjusted for 415 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+      projected_fs |  -58.42653    26.7745    -2.18   0.030    -111.0574   -5.795619
+       log_at_lag1 |  -3.513199   10.43992    -0.34   0.737    -24.03505    17.00865
+     leverage_lag1 |   169.4524   50.77836     3.34   0.001     69.63686     269.268
+  tangibility_lag1 |  -38.65584   57.65151    -0.67   0.503     -151.982    74.67034
+profitability_lag1 |  -220.5578   65.20371    -3.38   0.001    -348.7295   -92.38622
+  ret_buy_and_hold |  -37.24995   13.20468    -2.82   0.005    -63.20653   -11.29337
+           ret_vol |   1077.001   150.0432     7.18   0.000     782.0597    1371.943
+   maturity_months |   1.109006   .5272657     2.10   0.036     .0725546    2.145458
+   facility_amount |  -.0462728   .0288583    -1.60   0.110    -.1029999    .0104543
+             _cons |   296.3309   78.09136     3.79   0.000     142.8259    449.8359
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (Bank)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Bank, Borrower Controls, YES, Loan Controls, YES) ///
+>         keep(projected_fs)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Lender Meeting - Nonbank - No controls
+. reghdfe spread lender_meeting if nonbank_lender == 1, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 7 iterations)
+
+HDFE Linear regression                            Number of obs   =        601
+Absorbing 2 HDFE groups                           F(   1,    319) =       0.07
+Statistics robust to heteroskedasticity           Prob > F        =     0.7972
+                                                  R-squared       =     0.1823
+                                                  Adj R-squared   =     0.1468
+                                                  Within R-sq.    =     0.0002
+Number of clusters (gvkey)   =        320         Root MSE        =   249.1169
+
+                                  (Std. err. adjusted for 320 clusters in gvkey)
+--------------------------------------------------------------------------------
+               |               Robust
+        spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+---------------+----------------------------------------------------------------
+lender_meeting |   8.337226   32.42375     0.26   0.797    -55.45418    72.12864
+         _cons |   481.0475   18.27407    26.32   0.000     445.0946    517.0004
+--------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (NB)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Nonbank, Borrower Controls, NO, Loan Controls, NO) ///
+>         keep(lender_meeting)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Lender Meeting - Nonbank - Borrower controls
+. reghdfe spread lender_meeting `borr_vars' if nonbank_lender == 1, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 7 iterations)
+
+HDFE Linear regression                            Number of obs   =        568
+Absorbing 2 HDFE groups                           F(   7,    302) =      15.71
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3659
+                                                  Adj R-squared   =     0.3292
+                                                  Within R-sq.    =     0.2084
+Number of clusters (gvkey)   =        303         Root MSE        =   222.5150
+
+                                      (Std. err. adjusted for 303 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+    lender_meeting |  -1.210179   30.17948    -0.04   0.968    -60.59887    58.17851
+       log_at_lag1 |  -30.93658   10.19468    -3.03   0.003    -50.99819   -10.87497
+     leverage_lag1 |    10.5465   31.53268     0.33   0.738    -51.50509    72.59809
+  tangibility_lag1 |  -5.612496   56.48779    -0.10   0.921     -116.772     105.547
+profitability_lag1 |  -235.1052   65.10444    -3.61   0.000    -363.2209   -106.9894
+  ret_buy_and_hold |  -80.92649   19.29028    -4.20   0.000    -118.8869   -42.96611
+           ret_vol |   634.3245   120.5357     5.26   0.000     397.1284    871.5206
+             _cons |   597.1942   75.78043     7.88   0.000     448.0697    746.3188
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (NB)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Nonbank, Borrower Controls, YES, Loan Controls, NO) ///
+>         keep(lender_meeting)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Lender Meeting - Nonbank - Borrower + Loan controls
+. reghdfe spread lender_meeting `borr_vars' `loan_vars' if nonbank_lender == 1, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 7 iterations)
+
+HDFE Linear regression                            Number of obs   =        568
+Absorbing 2 HDFE groups                           F(   9,    302) =      18.18
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3797
+                                                  Adj R-squared   =     0.3414
+                                                  Within R-sq.    =     0.2256
+Number of clusters (gvkey)   =        303         Root MSE        =   220.4930
+
+                                      (Std. err. adjusted for 303 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+    lender_meeting |    -.80523   29.92134    -0.03   0.979    -59.68595    58.07549
+       log_at_lag1 |  -18.95389   12.68037    -1.49   0.136    -43.90696    5.999182
+     leverage_lag1 |   19.04832   31.30763     0.61   0.543    -42.56041    80.65705
+  tangibility_lag1 |  -7.868731   57.17803    -0.14   0.891    -120.3865    104.6491
+profitability_lag1 |  -228.8675   63.77083    -3.59   0.000    -354.3589    -103.376
+  ret_buy_and_hold |  -74.83948   19.27194    -3.88   0.000    -112.7638   -36.91518
+           ret_vol |    585.286   118.5206     4.94   0.000     352.0552    818.5168
+   maturity_months |   -.828763   .5089224    -1.63   0.104    -1.830246    .1727202
+   facility_amount |  -.0649866   .0248564    -2.61   0.009    -.1139003   -.0160729
+             _cons |    588.131   92.37121     6.37   0.000     406.3583    769.9037
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (NB)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Nonbank, Borrower Controls, YES, Loan Controls, YES) ///
+>         keep(lender_meeting)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Lender Meeting - Bank - No controls
+. reghdfe spread lender_meeting if nonbank_lender == 0, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =        601
+Absorbing 2 HDFE groups                           F(   1,    432) =      10.88
+Statistics robust to heteroskedasticity           Prob > F        =     0.0011
+                                                  R-squared       =     0.1958
+                                                  Adj R-squared   =     0.1608
+                                                  Within R-sq.    =     0.0195
+Number of clusters (gvkey)   =        433         Root MSE        =   272.2110
+
+                                  (Std. err. adjusted for 433 clusters in gvkey)
+--------------------------------------------------------------------------------
+               |               Robust
+        spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+---------------+----------------------------------------------------------------
+lender_meeting |   101.8626   30.88291     3.30   0.001     41.16313     162.562
+         _cons |   463.0558   17.31026    26.75   0.000      429.033    497.0786
+--------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (Bank)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Bank, Borrower Controls, NO, Loan Controls, NO) ///
+>         keep(lender_meeting)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Lender Meeting - Bank - Borrower controls
+. reghdfe spread lender_meeting `borr_vars' if nonbank_lender == 0, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =        574
+Absorbing 2 HDFE groups                           F(   7,    414) =      15.47
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3923
+                                                  Adj R-squared   =     0.3576
+                                                  Within R-sq.    =     0.2505
+Number of clusters (gvkey)   =        415         Root MSE        =   240.2092
+
+                                      (Std. err. adjusted for 415 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+    lender_meeting |   42.15722   28.29597     1.49   0.137    -13.46446    97.77891
+       log_at_lag1 |  -3.615498   10.08518    -0.36   0.720    -23.44004    16.20905
+     leverage_lag1 |   168.0983   51.82807     3.24   0.001     66.21935    269.9773
+  tangibility_lag1 |  -19.80848   58.07668    -0.34   0.733    -133.9704    94.35346
+profitability_lag1 |  -220.7164   69.56331    -3.17   0.002    -357.4577   -83.97505
+  ret_buy_and_hold |  -36.60079   13.37969    -2.74   0.006     -62.9014   -10.30018
+           ret_vol |   1061.258   150.6861     7.04   0.000     765.0528    1357.463
+             _cons |   302.9215   66.26455     4.57   0.000     172.6645    433.1784
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (Bank)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Bank, Borrower Controls, YES, Loan Controls, NO) ///
+>         keep(lender_meeting)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Lender Meeting - Bank - Borrower + Loan controls
+. reghdfe spread lender_meeting `borr_vars' `loan_vars' if nonbank_lender == 0, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =        574
+Absorbing 2 HDFE groups                           F(   9,    414) =      12.99
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.4012
+                                                  Adj R-squared   =     0.3646
+                                                  Within R-sq.    =     0.2614
+Number of clusters (gvkey)   =        415         Root MSE        =   238.8894
+
+                                      (Std. err. adjusted for 415 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+    lender_meeting |   38.19165   28.33766     1.35   0.178    -17.51198    93.89529
+       log_at_lag1 |   .9935934   10.39766     0.10   0.924    -19.44521    21.43239
+     leverage_lag1 |   165.4263   50.87035     3.25   0.001     65.42996    265.4227
+  tangibility_lag1 |  -23.20344   57.82215    -0.40   0.688     -136.865    90.45817
+profitability_lag1 |  -221.9225   68.81389    -3.22   0.001    -357.1907   -86.65431
+  ret_buy_and_hold |  -37.06731   13.12175    -2.82   0.005    -62.86087   -11.27374
+           ret_vol |   1041.148   147.6311     7.05   0.000     750.9476    1331.348
+   maturity_months |   .9851552   .5337303     1.85   0.066    -.0640041    2.034315
+   facility_amount |  -.0439769   .0307618    -1.43   0.154    -.1044457    .0164918
+             _cons |   233.7159    71.9324     3.25   0.001     92.31757    375.1141
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (Bank)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Bank, Borrower Controls, YES, Loan Controls, YES) ///
+>         keep(lender_meeting)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Total Info Cov - Nonbank - No controls
+. reghdfe spread total_info_covenants if nonbank_lender == 1, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 7 iterations)
+
+HDFE Linear regression                            Number of obs   =        601
+Absorbing 2 HDFE groups                           F(   1,    319) =       1.72
+Statistics robust to heteroskedasticity           Prob > F        =     0.1907
+                                                  R-squared       =     0.1875
+                                                  Adj R-squared   =     0.1522
+                                                  Within R-sq.    =     0.0065
+Number of clusters (gvkey)   =        320         Root MSE        =   248.3243
+
+                                        (Std. err. adjusted for 320 clusters in gvkey)
+--------------------------------------------------------------------------------------
+                     |               Robust
+              spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+---------------------+----------------------------------------------------------------
+total_info_covenants |   22.59182   17.22726     1.31   0.191    -11.30158    56.48522
+               _cons |   455.3732   29.10409    15.65   0.000      398.113    512.6334
+--------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (NB)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Nonbank, Borrower Controls, NO, Loan Controls, NO) ///
+>         keep(total_info_covenants)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Total Info Cov - Nonbank - Borrower controls
+. reghdfe spread total_info_covenants `borr_vars' if nonbank_lender == 1, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 7 iterations)
+
+HDFE Linear regression                            Number of obs   =        568
+Absorbing 2 HDFE groups                           F(   7,    302) =      15.84
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3659
+                                                  Adj R-squared   =     0.3292
+                                                  Within R-sq.    =     0.2084
+Number of clusters (gvkey)   =        303         Root MSE        =   222.5122
+
+                                        (Std. err. adjusted for 303 clusters in gvkey)
+--------------------------------------------------------------------------------------
+                     |               Robust
+              spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+---------------------+----------------------------------------------------------------
+total_info_covenants |   1.524315   15.87325     0.10   0.924    -29.71187     32.7605
+         log_at_lag1 |  -30.58601   10.19036    -3.00   0.003    -50.63912    -10.5329
+       leverage_lag1 |   9.918999   31.32215     0.32   0.752    -51.71829    71.55629
+    tangibility_lag1 |   -5.17569   56.73992    -0.09   0.927    -116.8313      106.48
+  profitability_lag1 |  -237.0974   64.81591    -3.66   0.000    -364.6455   -109.5494
+    ret_buy_and_hold |  -80.87689   19.40392    -4.17   0.000    -119.0609   -42.69289
+             ret_vol |   632.9525   120.4578     5.25   0.000     395.9096    869.9954
+               _cons |   593.0469   80.65625     7.35   0.000     434.3274    751.7663
+--------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (NB)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Nonbank, Borrower Controls, YES, Loan Controls, NO) ///
+>         keep(total_info_covenants)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Total Info Cov - Nonbank - Borrower + Loan controls
+. reghdfe spread total_info_covenants `borr_vars' `loan_vars' if nonbank_lender == 1, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 7 iterations)
+
+HDFE Linear regression                            Number of obs   =        568
+Absorbing 2 HDFE groups                           F(   9,    302) =      18.33
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3797
+                                                  Adj R-squared   =     0.3414
+                                                  Within R-sq.    =     0.2257
+Number of clusters (gvkey)   =        303         Root MSE        =   220.4832
+
+                                        (Std. err. adjusted for 303 clusters in gvkey)
+--------------------------------------------------------------------------------------
+                     |               Robust
+              spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+---------------------+----------------------------------------------------------------
+total_info_covenants |   2.643474   15.98094     0.17   0.869    -28.80463    34.09158
+         log_at_lag1 |  -18.39985   12.38485    -1.49   0.138    -42.77138     5.97167
+       leverage_lag1 |   18.19733    31.2236     0.58   0.560    -43.24604     79.6407
+    tangibility_lag1 |   -7.12496   57.54175    -0.12   0.902    -120.3585    106.1086
+  profitability_lag1 |  -231.8103   63.48365    -3.65   0.000    -356.7366    -106.884
+    ret_buy_and_hold |  -74.71968     19.429    -3.85   0.000     -112.953   -36.48632
+             ret_vol |   583.4564   119.0322     4.90   0.000     349.2189    817.6939
+     maturity_months |  -.8381955   .5168472    -1.62   0.106    -1.855273    .1788823
+     facility_amount |  -.0647888     .02501    -2.59   0.010    -.1140048   -.0155728
+               _cons |   581.9498   91.89706     6.33   0.000     401.1102    762.7895
+--------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (NB)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Nonbank, Borrower Controls, YES, Loan Controls, YES) ///
+>         keep(total_info_covenants)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Total Info Cov - Bank - No controls
+. reghdfe spread total_info_covenants if nonbank_lender == 0, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =        601
+Absorbing 2 HDFE groups                           F(   1,    432) =       1.56
+Statistics robust to heteroskedasticity           Prob > F        =     0.2127
+                                                  R-squared       =     0.1828
+                                                  Adj R-squared   =     0.1473
+                                                  Within R-sq.    =     0.0037
+Number of clusters (gvkey)   =        433         Root MSE        =   274.3915
+
+                                        (Std. err. adjusted for 433 clusters in gvkey)
+--------------------------------------------------------------------------------------
+                     |               Robust
+              spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+---------------------+----------------------------------------------------------------
+total_info_covenants |   20.77793   16.64855     1.25   0.213    -11.94429    53.50016
+               _cons |   462.4614   25.65461    18.03   0.000      412.038    512.8847
+--------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (Bank)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Bank, Borrower Controls, NO, Loan Controls, NO) ///
+>         keep(total_info_covenants)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Total Info Cov - Bank - Borrower controls
+. reghdfe spread total_info_covenants `borr_vars' if nonbank_lender == 0, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =        574
+Absorbing 2 HDFE groups                           F(   7,    414) =      15.83
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3898
+                                                  Adj R-squared   =     0.3549
+                                                  Within R-sq.    =     0.2473
+Number of clusters (gvkey)   =        415         Root MSE        =   240.7140
+
+                                        (Std. err. adjusted for 415 clusters in gvkey)
+--------------------------------------------------------------------------------------
+                     |               Robust
+              spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+---------------------+----------------------------------------------------------------
+total_info_covenants |   -2.59348   16.28697    -0.16   0.874    -34.60895    29.42199
+         log_at_lag1 |  -3.592217   10.20837    -0.35   0.725    -23.65893    16.47449
+       leverage_lag1 |   170.9664   51.95802     3.29   0.001     68.83195    273.1008
+    tangibility_lag1 |  -23.11553   57.99418    -0.40   0.690    -137.1153    90.88424
+  profitability_lag1 |  -227.6511   68.63412    -3.32   0.001    -362.5659   -92.73624
+    ret_buy_and_hold |   -35.9171   13.38921    -2.68   0.008    -62.23641   -9.597794
+             ret_vol |   1082.776    152.273     7.11   0.000     783.4508      1382.1
+               _cons |    311.181   74.06859     4.20   0.000     165.5836    456.7785
+--------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (Bank)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Bank, Borrower Controls, YES, Loan Controls, NO) ///
+>         keep(total_info_covenants)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** Total Info Cov - Bank - Borrower + Loan controls
+. reghdfe spread total_info_covenants `borr_vars' `loan_vars' if nonbank_lender == 0, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =        574
+Absorbing 2 HDFE groups                           F(   9,    414) =      13.36
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3993
+                                                  Adj R-squared   =     0.3626
+                                                  Within R-sq.    =     0.2591
+Number of clusters (gvkey)   =        415         Root MSE        =   239.2672
+
+                                        (Std. err. adjusted for 415 clusters in gvkey)
+--------------------------------------------------------------------------------------
+                     |               Robust
+              spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+---------------------+----------------------------------------------------------------
+total_info_covenants |  -6.065456   16.21844    -0.37   0.709    -37.94622    25.81531
+         log_at_lag1 |   .4164988   10.67622     0.04   0.969    -20.56987    21.40287
+       leverage_lag1 |    167.939    50.8998     3.30   0.001     67.88472    267.9933
+    tangibility_lag1 |  -27.10383   57.76955    -0.47   0.639     -140.662    86.45439
+  profitability_lag1 |  -228.8431   67.71161    -3.38   0.001    -361.9445   -95.74163
+    ret_buy_and_hold |    -36.238   13.14863    -2.76   0.006     -62.0844    -10.3916
+             ret_vol |   1063.186   149.5079     7.11   0.000     769.2972    1357.076
+     maturity_months |    1.04667   .5317803     1.97   0.050     .0013435    2.091996
+     facility_amount |  -.0443251   .0295589    -1.50   0.134    -.1024294    .0137791
+               _cons |   245.3897   79.04957     3.10   0.002     90.00107    400.7782
+--------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (Bank)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Bank, Borrower Controls, YES, Loan Controls, YES) ///
+>         keep(total_info_covenants)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** All Info Cov - Nonbank - No controls
+. reghdfe spread all_info_covenants if nonbank_lender == 1, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 7 iterations)
+
+HDFE Linear regression                            Number of obs   =        601
+Absorbing 2 HDFE groups                           F(   1,    319) =       4.69
+Statistics robust to heteroskedasticity           Prob > F        =     0.0310
+                                                  R-squared       =     0.1907
+                                                  Adj R-squared   =     0.1555
+                                                  Within R-sq.    =     0.0104
+Number of clusters (gvkey)   =        320         Root MSE        =   247.8447
+
+                                      (Std. err. adjusted for 320 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+all_info_covenants |   95.92025    44.2837     2.17   0.031     8.795244    183.0452
+             _cons |   475.8768   15.08657    31.54   0.000      446.195    505.5585
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (NB)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Nonbank, Borrower Controls, NO, Loan Controls, NO) ///
+>         keep(all_info_covenants)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** All Info Cov - Nonbank - Borrower controls
+. reghdfe spread all_info_covenants `borr_vars' if nonbank_lender == 1, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 7 iterations)
+
+HDFE Linear regression                            Number of obs   =        568
+Absorbing 2 HDFE groups                           F(   7,    302) =      15.44
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3694
+                                                  Adj R-squared   =     0.3329
+                                                  Within R-sq.    =     0.2128
+Number of clusters (gvkey)   =        303         Root MSE        =   221.8988
+
+                                      (Std. err. adjusted for 303 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+all_info_covenants |   66.39803   50.25944     1.32   0.187    -32.50503    165.3011
+       log_at_lag1 |  -29.51266   10.25854    -2.88   0.004    -49.69992   -9.325399
+     leverage_lag1 |   2.689076   30.43304     0.09   0.930    -57.19859    62.57674
+  tangibility_lag1 |  -6.274507    56.6314    -0.11   0.912    -117.7166    105.1676
+profitability_lag1 |  -245.2903     65.702    -3.73   0.000     -374.582   -115.9987
+  ret_buy_and_hold |  -79.69706   19.55589    -4.08   0.000    -118.1801   -41.21399
+           ret_vol |   620.6904   124.7638     4.97   0.000     375.1738    866.2069
+             _cons |   588.5028   76.69557     7.67   0.000     437.5774    739.4282
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (NB)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Nonbank, Borrower Controls, YES, Loan Controls, NO) ///
+>         keep(all_info_covenants)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** All Info Cov - Nonbank - Borrower + Loan controls
+. reghdfe spread all_info_covenants `borr_vars' `loan_vars' if nonbank_lender == 1, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 7 iterations)
+
+HDFE Linear regression                            Number of obs   =        568
+Absorbing 2 HDFE groups                           F(   9,    302) =      17.62
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3839
+                                                  Adj R-squared   =     0.3458
+                                                  Within R-sq.    =     0.2308
+Number of clusters (gvkey)   =        303         Root MSE        =   219.7513
+
+                                      (Std. err. adjusted for 303 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+all_info_covenants |   72.42029   48.54208     1.49   0.137    -23.10326    167.9438
+       log_at_lag1 |  -17.12746   12.80686    -1.34   0.182    -42.32945    8.074536
+     leverage_lag1 |   10.77724   30.14873     0.36   0.721    -48.55094    70.10543
+  tangibility_lag1 |  -8.656381   57.27346    -0.15   0.880     -121.362    104.0492
+profitability_lag1 |  -239.6265   64.43013    -3.72   0.000    -366.4154   -112.8377
+  ret_buy_and_hold |  -73.34249   19.53958    -3.75   0.000    -111.7935   -34.89152
+           ret_vol |   569.4623   123.3706     4.62   0.000     326.6873    812.2373
+   maturity_months |  -.8511601   .5095781    -1.67   0.096    -1.853934    .1516132
+   facility_amount |   -.066508    .025071    -2.65   0.008     -.115844    -.017172
+             _cons |   578.7303   94.01493     6.16   0.000      393.723    763.7376
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (NB)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Nonbank, Borrower Controls, YES, Loan Controls, YES) ///
+>         keep(all_info_covenants)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** All Info Cov - Bank - No controls
+. reghdfe spread all_info_covenants if nonbank_lender == 0, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =        601
+Absorbing 2 HDFE groups                           F(   1,    432) =       7.57
+Statistics robust to heteroskedasticity           Prob > F        =     0.0062
+                                                  R-squared       =     0.1923
+                                                  Adj R-squared   =     0.1571
+                                                  Within R-sq.    =     0.0152
+Number of clusters (gvkey)   =        433         Root MSE        =   272.8028
+
+                                      (Std. err. adjusted for 433 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+all_info_covenants |   146.1325   53.10459     2.75   0.006     41.75695     250.508
+             _cons |   475.2454   16.53622    28.74   0.000     442.7439    507.7468
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (Bank)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Bank, Borrower Controls, NO, Loan Controls, NO) ///
+>         keep(all_info_covenants)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** All Info Cov - Bank - Borrower controls
+. reghdfe spread all_info_covenants `borr_vars' if nonbank_lender == 0, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =        574
+Absorbing 2 HDFE groups                           F(   7,    414) =      15.81
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3947
+                                                  Adj R-squared   =     0.3600
+                                                  Within R-sq.    =     0.2534
+Number of clusters (gvkey)   =        415         Root MSE        =   239.7468
+
+                                      (Std. err. adjusted for 415 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+all_info_covenants |   96.40017    55.9806     1.72   0.086    -13.64148    206.4418
+       log_at_lag1 |  -2.301636   10.03147    -0.23   0.819     -22.0206    17.41733
+     leverage_lag1 |   169.7946   51.28996     3.31   0.001     68.97342    270.6159
+  tangibility_lag1 |  -19.18041   57.86417    -0.33   0.740    -132.9246    94.56381
+profitability_lag1 |   -219.508   72.84638    -3.01   0.003    -362.7029   -76.31313
+  ret_buy_and_hold |  -36.86002   13.35322    -2.76   0.006    -63.10859   -10.61145
+           ret_vol |   1074.992   154.1104     6.98   0.000     772.0551    1377.928
+             _cons |   294.5634   66.42142     4.43   0.000     163.9981    425.1287
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (Bank)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Bank, Borrower Controls, YES, Loan Controls, NO) ///
+>         keep(all_info_covenants)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. *** All Info Cov - Bank - Borrower + Loan controls
+. reghdfe spread all_info_covenants `borr_vars' `loan_vars' if nonbank_lender == 0, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =        574
+Absorbing 2 HDFE groups                           F(   9,    414) =      13.15
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.4029
+                                                  Adj R-squared   =     0.3665
+                                                  Within R-sq.    =     0.2636
+Number of clusters (gvkey)   =        415         Root MSE        =   238.5425
+
+                                      (Std. err. adjusted for 415 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+all_info_covenants |   85.57083   57.14456     1.50   0.135    -26.75883    197.9005
+       log_at_lag1 |   1.883548   10.41159     0.18   0.857    -18.58263    22.34973
+     leverage_lag1 |   167.0168   50.44302     3.31   0.001     67.86041    266.1732
+  tangibility_lag1 |  -22.56746   57.64753    -0.39   0.696    -135.8858     90.7509
+profitability_lag1 |  -221.0177   71.72977    -3.08   0.002    -362.0177   -80.01775
+  ret_buy_and_hold |  -37.26597   13.12825    -2.84   0.005    -63.07232   -11.45963
+           ret_vol |   1054.594   151.2189     6.97   0.000     757.3416    1351.847
+   maturity_months |   .9634836   .5370061     1.79   0.074    -.0921149    2.019082
+   facility_amount |  -.0419885   .0305752    -1.37   0.170    -.1020904    .0181134
+             _cons |   228.7117   72.26326     3.16   0.002     86.66306    370.7604
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table2_SpreadRegressions.xls", append excel ///
+>         ctitle("Spread (Bank)") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Sample, Bank, Borrower Controls, YES, Loan Controls, YES) ///
+>         keep(all_info_covenants)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table2_SpreadRegressions.xls
+dir : seeout
+
+. 
+. /**************
+>         Statistical Tests: Coefficient Differences Between Nonbank and Bank (Table 3)
+>         ***************/
+. 
+. *** Create interaction terms for testing coefficient differences
+. gen monthly_fs_x_nb = monthly_fs * nonbank_lender
+
+. gen projected_fs_x_nb = projected_fs * nonbank_lender
+
+. gen lender_meeting_x_nb = lender_meeting * nonbank_lender
+
+. gen total_info_cov_x_nb = total_info_covenants * nonbank_lender
+
+. gen all_info_cov_x_nb = all_info_covenants * nonbank_lender
+
+. 
+. *** Test 1: Monthly FS - No controls
+. reghdfe spread monthly_fs monthly_fs_x_nb, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,202
+Absorbing 2 HDFE groups                           F(   2,    699) =       2.42
+Statistics robust to heteroskedasticity           Prob > F        =     0.0896
+                                                  R-squared       =     0.1569
+                                                  Adj R-squared   =     0.1383
+                                                  Within R-sq.    =     0.0072
+Number of clusters (gvkey)   =        700         Root MSE        =   263.2953
+
+                                   (Std. err. adjusted for 700 clusters in gvkey)
+---------------------------------------------------------------------------------
+                |               Robust
+         spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+----------------+----------------------------------------------------------------
+     monthly_fs |   6.360163   28.64349     0.22   0.824    -49.87743    62.59775
+monthly_fs_x_nb |   54.75149   33.41295     1.64   0.102    -10.85029    120.3533
+          _cons |   472.4762   14.58338    32.40   0.000     443.8437    501.1086
+---------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table3_CoefficientTests.xls", replace excel ///
+>         ctitle("Monthly FS") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Controls, NO) ///
+>         keep(monthly_fs monthly_fs_x_nb)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table3_CoefficientTests.xls
+dir : seeout
+
+. 
+. *** Test 2: Monthly FS - Borrower controls
+. reghdfe spread monthly_fs monthly_fs_x_nb `borr_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(   8,    665) =      19.67
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3306
+                                                  Adj R-squared   =     0.3113
+                                                  Within R-sq.    =     0.2002
+Number of clusters (gvkey)   =        666         Root MSE        =   237.3277
+
+                                      (Std. err. adjusted for 666 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+        monthly_fs |  -12.52781   27.06159    -0.46   0.644    -65.66426    40.60864
+   monthly_fs_x_nb |    27.8695   31.68848     0.88   0.379    -34.35203    90.09103
+       log_at_lag1 |  -13.53548   7.821535    -1.73   0.084    -28.89336    1.822403
+     leverage_lag1 |   97.79168   34.31302     2.85   0.005     30.41678    165.1666
+  tangibility_lag1 |   -10.8691   41.88078    -0.26   0.795    -93.10358    71.36538
+profitability_lag1 |  -245.4102   51.68396    -4.75   0.000    -346.8936   -143.9268
+  ret_buy_and_hold |  -53.73511   12.23629    -4.39   0.000    -77.76152    -29.7087
+           ret_vol |   830.5837   109.1542     7.61   0.000     616.2552    1044.912
+             _cons |   429.7363   54.72167     7.85   0.000     322.2883    537.1844
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table3_CoefficientTests.xls", append excel ///
+>         ctitle("Monthly FS") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Controls, Borrower) ///
+>         keep(monthly_fs monthly_fs_x_nb)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table3_CoefficientTests.xls
+dir : seeout
+
+. 
+. *** Test 3: Monthly FS - Borrower + Loan controls
+. reghdfe spread monthly_fs monthly_fs_x_nb `borr_vars' `loan_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(  10,    665) =      16.92
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3380
+                                                  Adj R-squared   =     0.3176
+                                                  Within R-sq.    =     0.2089
+Number of clusters (gvkey)   =        666         Root MSE        =   236.2378
+
+                                      (Std. err. adjusted for 666 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+        monthly_fs |  -13.78022   26.73421    -0.52   0.606    -66.27385    38.71341
+   monthly_fs_x_nb |   26.33909   31.43296     0.84   0.402    -35.38072     88.0589
+       log_at_lag1 |  -4.530935   8.783253    -0.52   0.606    -21.77718    12.71531
+     leverage_lag1 |   100.4255   33.96605     2.96   0.003     33.73185    167.1191
+  tangibility_lag1 |  -13.56818   41.65139    -0.33   0.745    -95.35226     68.2159
+profitability_lag1 |  -243.3222   50.23122    -4.84   0.000    -341.9531   -144.6913
+  ret_buy_and_hold |  -53.58803   12.21129    -4.39   0.000    -77.56536   -29.61069
+           ret_vol |    811.161   109.8096     7.39   0.000     595.5456    1026.776
+   maturity_months |   .2813406   .3822711     0.74   0.462    -.4692632    1.031944
+   facility_amount |  -.0542042   .0207274    -2.62   0.009    -.0949033   -.0135051
+             _cons |   372.6006    61.4717     6.06   0.000     251.8986    493.3026
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table3_CoefficientTests.xls", append excel ///
+>         ctitle("Monthly FS") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Controls, Borrower+Loan) ///
+>         keep(monthly_fs monthly_fs_x_nb)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table3_CoefficientTests.xls
+dir : seeout
+
+. 
+. *** Test 4: Projected FS - No controls
+. reghdfe spread projected_fs projected_fs_x_nb, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,202
+Absorbing 2 HDFE groups                           F(   2,    699) =       1.01
+Statistics robust to heteroskedasticity           Prob > F        =     0.3665
+                                                  R-squared       =     0.1530
+                                                  Adj R-squared   =     0.1343
+                                                  Within R-sq.    =     0.0026
+Number of clusters (gvkey)   =        700         Root MSE        =   263.9038
+
+                                     (Std. err. adjusted for 700 clusters in gvkey)
+-----------------------------------------------------------------------------------
+                  |               Robust
+           spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+------------------+----------------------------------------------------------------
+     projected_fs |  -33.14084   26.90899    -1.23   0.219    -85.97297    19.69129
+projected_fs_x_nb |    26.0591   22.53517     1.16   0.248    -18.18562    70.30383
+            _cons |    495.695   20.98067    23.63   0.000     454.5023    536.8877
+-----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table3_CoefficientTests.xls", append excel ///
+>         ctitle("Projected FS") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Controls, NO) ///
+>         keep(projected_fs projected_fs_x_nb)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table3_CoefficientTests.xls
+dir : seeout
+
+. 
+. *** Test 5: Projected FS - Borrower controls
+. reghdfe spread projected_fs projected_fs_x_nb `borr_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(   8,    665) =      20.61
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3347
+                                                  Adj R-squared   =     0.3155
+                                                  Within R-sq.    =     0.2050
+Number of clusters (gvkey)   =        666         Root MSE        =   236.6134
+
+                                      (Std. err. adjusted for 666 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+      projected_fs |  -53.01686   22.89698    -2.32   0.021    -97.97594   -8.057785
+ projected_fs_x_nb |   25.20858   20.20061     1.25   0.213    -14.45609    64.87325
+       log_at_lag1 |  -17.81139    7.51882    -2.37   0.018    -32.57488   -3.047905
+     leverage_lag1 |   99.97853   34.01628     2.94   0.003     33.18627    166.7708
+  tangibility_lag1 |  -19.62577   41.57008    -0.47   0.637    -101.2502    61.99866
+profitability_lag1 |  -233.5659   49.81461    -4.69   0.000    -331.3787    -135.753
+  ret_buy_and_hold |  -53.83781   11.79519    -4.56   0.000    -76.99812    -30.6775
+           ret_vol |   834.4751   108.4151     7.70   0.000      621.598    1047.352
+             _cons |   483.7817   56.02292     8.64   0.000     373.7786    593.7848
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table3_CoefficientTests.xls", append excel ///
+>         ctitle("Projected FS") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Controls, Borrower) ///
+>         keep(projected_fs projected_fs_x_nb)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table3_CoefficientTests.xls
+dir : seeout
+
+. 
+. *** Test 6: Projected FS - Borrower + Loan controls
+. reghdfe spread projected_fs projected_fs_x_nb `borr_vars' `loan_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(  10,    665) =      17.96
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3427
+                                                  Adj R-squared   =     0.3225
+                                                  Within R-sq.    =     0.2146
+Number of clusters (gvkey)   =        666         Root MSE        =   235.3951
+
+                                      (Std. err. adjusted for 666 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+      projected_fs |  -55.83517    22.7346    -2.46   0.014    -100.4754   -11.19494
+ projected_fs_x_nb |   21.36638   20.11162     1.06   0.288    -18.12354    60.85631
+       log_at_lag1 |  -8.923983   8.538202    -1.05   0.296    -25.68906    7.841099
+     leverage_lag1 |   102.2309   33.59866     3.04   0.002     36.25866    168.2031
+  tangibility_lag1 |  -22.72217   41.13493    -0.55   0.581    -103.4922    58.04781
+profitability_lag1 |  -230.9837   48.24858    -4.79   0.000    -325.7216   -136.2458
+  ret_buy_and_hold |  -53.89881     11.754    -4.59   0.000    -76.97823   -30.81939
+           ret_vol |   813.8205   108.9639     7.47   0.000     599.8657    1027.775
+   maturity_months |   .3618388   .3839605     0.94   0.346    -.3920822     1.11576
+   facility_amount |  -.0557627   .0204423    -2.73   0.007    -.0959019   -.0156235
+             _cons |   425.8796   61.16288     6.96   0.000      305.784    545.9752
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table3_CoefficientTests.xls", append excel ///
+>         ctitle("Projected FS") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Controls, Borrower+Loan) ///
+>         keep(projected_fs projected_fs_x_nb)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table3_CoefficientTests.xls
+dir : seeout
+
+. 
+. *** Test 7: Lender Meeting - No controls
+. reghdfe spread lender_meeting lender_meeting_x_nb, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,202
+Absorbing 2 HDFE groups                           F(   2,    699) =       3.47
+Statistics robust to heteroskedasticity           Prob > F        =     0.0315
+                                                  R-squared       =     0.1572
+                                                  Adj R-squared   =     0.1386
+                                                  Within R-sq.    =     0.0076
+Number of clusters (gvkey)   =        700         Root MSE        =   263.2469
+
+                                       (Std. err. adjusted for 700 clusters in gvkey)
+-------------------------------------------------------------------------------------
+                    |               Robust
+             spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+--------------------+----------------------------------------------------------------
+     lender_meeting |   72.57021   28.98696     2.50   0.013     15.65826    129.4822
+lender_meeting_x_nb |   -32.8286   34.82065    -0.94   0.346    -101.1942    35.53699
+              _cons |   470.7086   13.01821    36.16   0.000     445.1491    496.2681
+-------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table3_CoefficientTests.xls", append excel ///
+>         ctitle("Lender Meeting") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Controls, NO) ///
+>         keep(lender_meeting lender_meeting_x_nb)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table3_CoefficientTests.xls
+dir : seeout
+
+. 
+. *** Test 8: Lender Meeting - Borrower controls
+. reghdfe spread lender_meeting lender_meeting_x_nb `borr_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(   8,    665) =      19.84
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3316
+                                                  Adj R-squared   =     0.3123
+                                                  Within R-sq.    =     0.2013
+Number of clusters (gvkey)   =        666         Root MSE        =   237.1592
+
+                                       (Std. err. adjusted for 666 clusters in gvkey)
+-------------------------------------------------------------------------------------
+                    |               Robust
+             spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+--------------------+----------------------------------------------------------------
+     lender_meeting |   40.11917   26.27884     1.53   0.127    -11.48032    91.71867
+lender_meeting_x_nb |  -35.84055   32.41161    -1.11   0.269    -99.48197    27.80087
+        log_at_lag1 |  -13.94713   7.730681    -1.80   0.072    -29.12661    1.232358
+      leverage_lag1 |   96.72467   34.31932     2.82   0.005     29.33739     164.112
+   tangibility_lag1 |  -9.896314   41.80347    -0.24   0.813    -91.97901    72.18638
+ profitability_lag1 |  -242.2354   53.09185    -4.56   0.000    -346.4832   -137.9875
+   ret_buy_and_hold |  -56.44349    12.1456    -4.65   0.000    -80.29182   -32.59515
+            ret_vol |   827.9801   106.2099     7.80   0.000     619.4329    1036.527
+              _cons |   429.4046   52.58695     8.17   0.000     326.1481     532.661
+-------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table3_CoefficientTests.xls", append excel ///
+>         ctitle("Lender Meeting") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Controls, Borrower) ///
+>         keep(lender_meeting lender_meeting_x_nb)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table3_CoefficientTests.xls
+dir : seeout
+
+. 
+. *** Test 9: Lender Meeting - Borrower + Loan controls
+. reghdfe spread lender_meeting lender_meeting_x_nb `borr_vars' `loan_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(  10,    665) =      17.08
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3391
+                                                  Adj R-squared   =     0.3188
+                                                  Within R-sq.    =     0.2102
+Number of clusters (gvkey)   =        666         Root MSE        =   236.0391
+
+                                       (Std. err. adjusted for 666 clusters in gvkey)
+-------------------------------------------------------------------------------------
+                    |               Robust
+             spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+--------------------+----------------------------------------------------------------
+     lender_meeting |    40.5945   25.96358     1.56   0.118    -10.38596    91.57496
+lender_meeting_x_nb |   -39.3216   32.27676    -1.22   0.224    -102.6982    24.05503
+        log_at_lag1 |  -4.603394   8.742435    -0.53   0.599    -21.76949    12.56271
+      leverage_lag1 |   99.62305   33.99674     2.93   0.004     32.86917    166.3769
+   tangibility_lag1 |  -12.53868   41.57769    -0.30   0.763    -94.17804    69.10069
+ profitability_lag1 |  -239.9653   51.52835    -4.66   0.000    -341.1431   -138.7874
+   ret_buy_and_hold |   -56.2832   12.10957    -4.65   0.000     -80.0608    -32.5056
+            ret_vol |   808.0058   106.8197     7.56   0.000     598.2612     1017.75
+    maturity_months |   .2691061   .3798275     0.71   0.479    -.4766994    1.014912
+    facility_amount |  -.0550417   .0210085    -2.62   0.009    -.0962927   -.0137908
+              _cons |   370.6682   59.39384     6.24   0.000     254.0462    487.2903
+-------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table3_CoefficientTests.xls", append excel ///
+>         ctitle("Lender Meeting") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Controls, Borrower+Loan) ///
+>         keep(lender_meeting lender_meeting_x_nb)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table3_CoefficientTests.xls
+dir : seeout
+
+. 
+. *** Test 10: Total Info Cov - No controls
+. reghdfe spread total_info_covenants total_info_cov_x_nb, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,202
+Absorbing 2 HDFE groups                           F(   2,    699) =       1.25
+Statistics robust to heteroskedasticity           Prob > F        =     0.2885
+                                                  R-squared       =     0.1540
+                                                  Adj R-squared   =     0.1353
+                                                  Within R-sq.    =     0.0038
+Number of clusters (gvkey)   =        700         Root MSE        =   263.7530
+
+                                        (Std. err. adjusted for 700 clusters in gvkey)
+--------------------------------------------------------------------------------------
+                     |               Robust
+              spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+---------------------+----------------------------------------------------------------
+total_info_covenants |   9.369785   14.78632     0.63   0.526    -19.66113     38.4007
+ total_info_cov_x_nb |   11.61783   11.83848     0.98   0.327    -11.62542    34.86107
+               _cons |   465.8909   21.32003    21.85   0.000     424.0319    507.7499
+--------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table3_CoefficientTests.xls", append excel ///
+>         ctitle("Total Info Cov") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Controls, NO) ///
+>         keep(total_info_covenants total_info_cov_x_nb)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table3_CoefficientTests.xls
+dir : seeout
+
+. 
+. *** Test 11: Total Info Cov - Borrower controls
+. reghdfe spread total_info_covenants total_info_cov_x_nb `borr_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(   8,    665) =      19.66
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3306
+                                                  Adj R-squared   =     0.3113
+                                                  Within R-sq.    =     0.2001
+Number of clusters (gvkey)   =        666         Root MSE        =   237.3385
+
+                                        (Std. err. adjusted for 666 clusters in gvkey)
+--------------------------------------------------------------------------------------
+                     |               Robust
+              spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+---------------------+----------------------------------------------------------------
+total_info_covenants |  -10.25435   13.60635    -0.75   0.451    -36.97094    16.46224
+ total_info_cov_x_nb |   7.494288   11.25205     0.67   0.506    -14.59953    29.58811
+         log_at_lag1 |  -14.86872   7.597226    -1.96   0.051    -29.78616    .0487165
+       leverage_lag1 |   99.43739    34.3726     2.89   0.004     31.94549    166.9293
+    tangibility_lag1 |  -13.81988   42.07258    -0.33   0.743    -96.43098    68.79122
+  profitability_lag1 |  -242.9337    50.9736    -4.77   0.000    -343.0222   -142.8451
+    ret_buy_and_hold |  -54.13153   12.02636    -4.50   0.000    -77.74574   -30.51733
+             ret_vol |   838.7848   108.0701     7.76   0.000     626.5852    1050.984
+               _cons |   445.5386   55.59622     8.01   0.000     336.3734    554.7039
+--------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table3_CoefficientTests.xls", append excel ///
+>         ctitle("Total Info Cov") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Controls, Borrower) ///
+>         keep(total_info_covenants total_info_cov_x_nb)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table3_CoefficientTests.xls
+dir : seeout
+
+. 
+. *** Test 12: Total Info Cov - Borrower + Loan controls
+. reghdfe spread total_info_covenants total_info_cov_x_nb `borr_vars' `loan_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(  10,    665) =      17.06
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3381
+                                                  Adj R-squared   =     0.3178
+                                                  Within R-sq.    =     0.2091
+Number of clusters (gvkey)   =        666         Root MSE        =   236.2092
+
+                                        (Std. err. adjusted for 666 clusters in gvkey)
+--------------------------------------------------------------------------------------
+                     |               Robust
+              spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+---------------------+----------------------------------------------------------------
+total_info_covenants |  -11.68445   13.40623    -0.87   0.384    -38.00808    14.63918
+ total_info_cov_x_nb |    5.93995   11.16985     0.53   0.595    -15.99248    27.87238
+         log_at_lag1 |  -6.005822   8.630897    -0.70   0.487    -22.95291    10.94127
+       leverage_lag1 |   102.2632   33.98989     3.01   0.003     35.52273    169.0036
+    tangibility_lag1 |  -16.89713   41.74811    -0.40   0.686    -98.87112    65.07686
+  profitability_lag1 |  -240.3508   49.38523    -4.87   0.000    -337.3206   -143.3811
+    ret_buy_and_hold |  -54.11715    11.9899    -4.51   0.000    -77.65977   -30.57454
+             ret_vol |   820.3535   108.6772     7.55   0.000     606.9618    1033.745
+     maturity_months |   .3108292   .3819412     0.81   0.416    -.4391267    1.060785
+     facility_amount |  -.0547739   .0206667    -2.65   0.008    -.0953536   -.0141941
+               _cons |   389.6112   61.31915     6.35   0.000     269.2088    510.0137
+--------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table3_CoefficientTests.xls", append excel ///
+>         ctitle("Total Info Cov") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Controls, Borrower+Loan) ///
+>         keep(total_info_covenants total_info_cov_x_nb)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table3_CoefficientTests.xls
+dir : seeout
+
+. 
+. *** Test 13: All Info Cov - No controls
+. reghdfe spread all_info_covenants all_info_cov_x_nb, absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,202
+Absorbing 2 HDFE groups                           F(   2,    699) =       4.96
+Statistics robust to heteroskedasticity           Prob > F        =     0.0073
+                                                  R-squared       =     0.1610
+                                                  Adj R-squared   =     0.1424
+                                                  Within R-sq.    =     0.0120
+Number of clusters (gvkey)   =        700         Root MSE        =   262.6673
+
+                                      (Std. err. adjusted for 700 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+all_info_covenants |   116.7555   51.31384     2.28   0.023      16.0078    217.5033
+ all_info_cov_x_nb |  -2.218624   63.04683    -0.04   0.972    -126.0025    121.5652
+             _cons |   475.7374   11.77791    40.39   0.000     452.6131    498.8618
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table3_CoefficientTests.xls", append excel ///
+>         ctitle("All Info Cov") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Controls, NO) ///
+>         keep(all_info_covenants all_info_cov_x_nb)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table3_CoefficientTests.xls
+dir : seeout
+
+. 
+. *** Test 14: All Info Cov - Borrower controls
+. reghdfe spread all_info_covenants all_info_cov_x_nb `borr_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(   8,    665) =      19.00
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3330
+                                                  Adj R-squared   =     0.3138
+                                                  Within R-sq.    =     0.2030
+Number of clusters (gvkey)   =        666         Root MSE        =   236.9047
+
+                                      (Std. err. adjusted for 666 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+all_info_covenants |   78.19186   54.09511     1.45   0.149    -28.02592    184.4096
+ all_info_cov_x_nb |  -22.55878   71.11722    -0.32   0.751    -162.2001    117.0826
+       log_at_lag1 |  -12.92941   7.705785    -1.68   0.094       -28.06    2.201194
+     leverage_lag1 |   95.37217    34.4625     2.77   0.006     27.70376    163.0406
+  tangibility_lag1 |  -10.73308   41.96062    -0.26   0.798    -93.12433    71.65818
+profitability_lag1 |  -243.1351   55.36085    -4.39   0.000    -351.8383    -134.432
+  ret_buy_and_hold |  -55.57882   12.20425    -4.55   0.000    -79.54231   -31.61532
+           ret_vol |   828.7991   110.0139     7.53   0.000     612.7826    1044.816
+             _cons |   423.8383   53.24372     7.96   0.000     319.2923    528.3844
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table3_CoefficientTests.xls", append excel ///
+>         ctitle("All Info Cov") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Controls, Borrower) ///
+>         keep(all_info_covenants all_info_cov_x_nb)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table3_CoefficientTests.xls
+dir : seeout
+
+. 
+. *** Test 15: All Info Cov - Borrower + Loan controls
+. reghdfe spread all_info_covenants all_info_cov_x_nb `borr_vars' `loan_vars', absorb(ff12 year) vce(cluster gvkey)
+(MWFE estimator converged in 6 iterations)
+
+HDFE Linear regression                            Number of obs   =      1,142
+Absorbing 2 HDFE groups                           F(  10,    665) =      16.33
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.3403
+                                                  Adj R-squared   =     0.3201
+                                                  Within R-sq.    =     0.2117
+Number of clusters (gvkey)   =        666         Root MSE        =   235.8194
+
+                                      (Std. err. adjusted for 666 clusters in gvkey)
+------------------------------------------------------------------------------------
+                   |               Robust
+            spread | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+all_info_covenants |   75.98129   53.22409     1.43   0.154    -28.52622    180.4888
+ all_info_cov_x_nb |  -20.89094   70.12543    -0.30   0.766    -158.5849     116.803
+       log_at_lag1 |  -3.723292   8.743939    -0.43   0.670    -20.89235    13.44576
+     leverage_lag1 |   98.05919   34.17065     2.87   0.004     30.96384    165.1545
+  tangibility_lag1 |  -13.32314   41.73032    -0.32   0.750     -95.2622    68.61592
+profitability_lag1 |  -241.2141   53.73262    -4.49   0.000    -346.7201    -135.708
+  ret_buy_and_hold |  -55.30408   12.15597    -4.55   0.000    -79.17279   -31.43537
+           ret_vol |   808.2727   110.8719     7.29   0.000     590.5715    1025.974
+   maturity_months |   .2597296   .3802134     0.68   0.495    -.4868336    1.006293
+   facility_amount |  -.0543297   .0209026    -2.60   0.010    -.0953729   -.0132866
+             _cons |   366.2371   60.12286     6.09   0.000     248.1836    484.2906
+------------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+-----------------------------------------------------+
+ Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-------------+---------------------------------------|
+        ff12 |        12           0          12     |
+        year |        14           1          13     |
+-----------------------------------------------------+
+
+. outreg2 using "$tabdir/7a_Table3_CoefficientTests.xls", append excel ///
+>         ctitle("All Info Cov") label dec(3) ///
+>         addtext(Industry FE, YES, Year FE, YES, Controls, Borrower+Loan) ///
+>         keep(all_info_covenants all_info_cov_x_nb)
+/Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Results/Tables/7a_Table3_CoefficientTests.xls
+dir : seeout
+
+. 
+. *** End log
+. log close
+      name:  <unnamed>
+       log:  /Users/zrsong/MIT Dropbox/Zirui Song/Research Projects/PSW_Nonbank Direct Lending/Code/LogFiles/7a_Analyze_MatchedPanelLoans.log
+  log type:  text
+ closed on:   3 Nov 2025, 11:30:37
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
